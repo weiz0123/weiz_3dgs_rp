@@ -1,3 +1,5 @@
 outputs/
 data/
 backup/
+datasets/
+logs/
