@@ -1,0 +1,44 @@
+name: 3dgs_research
+
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+
+dependencies:
+  - python=3.10
+  - pip
+
+  # core scientific stack
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - tqdm
+  - scikit-image
+  - scikit-learn
+
+  # image processing
+  - pillow
+  - opencv
+  - imageio
+  - imageio-ffmpeg
+
+  # video processing
+  - ffmpeg
+
+  # PyTorch + CUDA
+  - pytorch
+  - torchvision
+  - pytorch-cuda=12.1
+
+  # useful debugging tools
+  - ipython
+  - jupyter
+
+  - pip:
+      - yt-dlp
+      - einops
+      - plyfile
+      - lpips
+      - trimesh
