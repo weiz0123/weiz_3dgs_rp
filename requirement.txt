@@ -1,0 +1,46 @@
+# Core scientific stack
+numpy
+scipy
+pandas
+matplotlib
+tqdm
+scikit-image
+scikit-learn
+
+# Image processing
+pillow
+opencv-python
+imageio
+imageio-ffmpeg
+
+# Development / debugging
+ipython
+jupyter
+
+# 3D / graphics utilities
+einops
+plyfile
+lpips
+trimesh
+
+# Video / media
+yt-dlp
+
+# HuggingFace ecosystem
+transformers
+huggingface-hub
+accelerate
+datasets
+safetensors
+tokenizers
+sentencepiece
+
+# ML utilities
+tensorboard
+rich
+pyyaml
+
+# PyTorch (CUDA wheel)
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch
+torchvision
