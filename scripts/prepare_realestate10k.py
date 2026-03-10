@@ -1,6 +1,7 @@
 import subprocess
 from pathlib import Path
 import cv2
+import shutil
 
 # -------------------------------------------------------
 # PATHS
@@ -12,13 +13,13 @@ subset_file = ROOT / "datasets/realestate10k_subset/subset_train.txt"
 train_dir = ROOT / "datasets/realestate10k_subset/RealEstate10K/train"
 
 video_dir = ROOT / "datasets/realestate10k_subset/videos"
-frame_dir = ROOT / "datasets/realestate10k_subset/frames"
+scene_dir = ROOT / "datasets/realestate10k_subset/scenes"
 
 video_dir.mkdir(parents=True, exist_ok=True)
-frame_dir.mkdir(parents=True, exist_ok=True)
+scene_dir.mkdir(parents=True, exist_ok=True)
 
 # -------------------------------------------------------
-# STEP 1: Collect URLs
+# STEP 1: READ SUBSET
 # -------------------------------------------------------
 
 video_entries = []
@@ -42,11 +43,11 @@ with open(subset_file, "r", encoding="utf-8-sig") as f:
 
         video_entries.append((url, metadata))
 
-print("Videos found:", len(video_entries))
+print("Scenes found:", len(video_entries))
 
 
 # -------------------------------------------------------
-# STEP 2: Download video
+# STEP 2: DOWNLOAD VIDEO (once per YouTube ID)
 # -------------------------------------------------------
 
 def download_video(url):
@@ -55,10 +56,10 @@ def download_video(url):
     output = video_dir / f"{video_id}.mp4"
 
     if output.exists():
-        print("Already downloaded:", video_id)
+        print("Video exists:", video_id)
         return output
 
-    print("Downloading:", url)
+    print("Downloading:", video_id)
 
     cmd = [
         "yt-dlp",
@@ -73,60 +74,93 @@ def download_video(url):
 
 
 # -------------------------------------------------------
-# STEP 3: Convert video → frames (OpenCV)
+# STEP 3: EXTRACT FRAMES USING METADATA TIMESTAMPS
 # -------------------------------------------------------
 
-def video_to_frames(video_path):
+def extract_scene_frames(video_path, metadata_path):
 
-    video_id = video_path.stem
-    out_dir = frame_dir / video_id
-    out_dir.mkdir(exist_ok=True)
+    scene_id = metadata_path.stem
 
-    print("Extracting frames:", video_id)
+    scene_path = scene_dir / scene_id
+    frames_path = scene_path / "frames"
+
+    frames_path.mkdir(parents=True, exist_ok=True)
+
+    shutil.copy(metadata_path, scene_path / "metadata.txt")
+
+    print("Processing scene:", scene_id)
+
+    # read metadata timestamps
+    with open(metadata_path) as f:
+        lines = f.readlines()
+
+    timestamps = []
+
+    for line in lines[1:]:
+        vals = line.split()
+        timestamps.append(float(vals[0]) / 1000.0)  # microseconds → milliseconds
 
     cap = cv2.VideoCapture(str(video_path))
 
-    frame_index = 0
-    saved_index = 0
+    saved = 0
 
-    while True:
+    for i, t in enumerate(timestamps):
+
+        # seek to timestamp
+        cap.set(cv2.CAP_PROP_POS_MSEC, t)
 
         ret, frame = cap.read()
 
         if not ret:
-            break
+            print(f"Warning: failed to read frame at {t} ms")
+            continue
 
-        # save every 10th frame (~3fps if video ≈30fps)
-        if frame_index % 10 == 0:
+        out_file = frames_path / f"{saved:05d}.jpg"
+        cv2.imwrite(str(out_file), frame)
 
-            out_path = out_dir / f"{saved_index:05d}.jpg"
-            cv2.imwrite(str(out_path), frame)
-            saved_index += 1
-
-        frame_index += 1
+        saved += 1
 
     cap.release()
 
-    print("Saved frames:", saved_index)
+    print("Saved frames:", saved)
 
 
 # -------------------------------------------------------
 # PIPELINE
 # -------------------------------------------------------
 
-videos = []
+videos = {}
 
 for url, metadata in video_entries:
 
-    video = download_video(url)
+    video_id = url.split("v=")[-1]
 
-    if video.exists():
-        videos.append(video)
+    if video_id not in videos:
 
-print("Downloaded videos:", len(videos))
+        video_path = download_video(url)
+        videos[video_id] = video_path
+
+    else:
+
+        video_path = videos[video_id]
+
+    if video_path.exists():
+
+        extract_scene_frames(video_path, metadata)
+
+print("\nDataset preparation complete.")
 
 
-for video in videos:
-    video_to_frames(video)
+# -------------------------------------------------------
+# CLEANUP
+# -------------------------------------------------------
 
-print("Dataset preparation complete.")
+print("\nDeleting videos...")
+
+for video_path in videos.values():
+
+    if video_path.exists():
+        video_path.unlink()
+        print("Deleted:", video_path.name)
+
+print("\nDataset preparation complete.")
