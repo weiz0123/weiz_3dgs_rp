@@ -1,0 +1,6 @@
+{
+    "python.analysis.extraPaths": [
+        "./diff-gaussian-rasterization",
+        "./gs_models"
+    ]
+}
