@@ -11,7 +11,7 @@ train_dir = ROOT / "datasets/realestate10k_subset/RealEstate10K/train"
 subset_file = ROOT / "datasets/realestate10k_subset/subset_train.txt"
 
 # number of scenes to sample
-NUM_SCENES = 100
+NUM_SCENES = 2000
 
 # -------------------------------------------------------
 # COLLECT ALL SCENES
