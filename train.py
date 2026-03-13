@@ -91,7 +91,7 @@ def train_one_step(model, optimizer, scene, device="cuda", n_input=3, emit_strid
     loss.backward()
     optimizer.step()
 
-    return stats, rendered.detach(), target_small.detach(), out, meta
+    return stats, rendered.detach(), target_small.detach(), meta
 
 
 def train_re10k(
@@ -159,7 +159,7 @@ def train_re10k(
                 break
 
             try:
-                stats, rendered, target, out, meta = train_one_step(
+                stats, rendered, target, meta = train_one_step(
                     model=model,
                     optimizer=optimizer,
                     scene=scene,
@@ -181,10 +181,12 @@ def train_re10k(
                         f"ssim={stats['loss_ssim']:.4f} "
                         f"smooth={stats['loss_smooth']:.4f}"
                     )
-
+                del rendered, target
+                torch.cuda.empty_cache()
             except Exception as e:
                 print(f"Skipping scene {i} ({scene['scene']}): {e}")
                 continue
+
 
         avg = total_loss_val / max(steps, 1)
         print(f"\nEpoch {ep+1} avg loss: {avg:.6f}\n")
