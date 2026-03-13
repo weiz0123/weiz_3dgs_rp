@@ -2,6 +2,7 @@ import os
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from pipeline.data_loader import RealEstate10KDataset
 
@@ -15,11 +16,6 @@ from train_re10k_utils import scene_to_model_inputs
 
 
 def identity_collate(batch):
-    """
-    Since each dataset item is already one full scene dict,
-    and scenes can have variable number of frames,
-    keep batch_size=1 and unwrap directly.
-    """
     return batch[0]
 
 
@@ -37,23 +33,21 @@ def train_one_step(model, optimizer, scene, device="cuda", n_input=3, emit_strid
         meta,
     ) = scene_to_model_inputs(scene)
 
-    # forward
     out = model(
-        imgs=input_imgs,      # [1,V,3,H,W]
-        Ks=input_Ks,          # [1,V,3,3]
-        c2ws=input_poses,     # [1,V,4,4]
+        imgs=input_imgs,
+        Ks=input_Ks,
+        c2ws=input_poses,
         ref_idx=0,
         emit_stride=emit_stride,
     )
 
-    means3D = out["means3D"][0]       # [M,3]
-    scales = out["scales"][0]         # [M,3]
-    rotations = out["rotations"][0]   # [M,4]
-    opacities = out["opacities"][0]   # [M,1]
-    colors = out["colors"][0]         # [M,3]
-    depth = out["depth"]              # [1,1,Hf,Wf]
+    means3D = out["means3D"][0]
+    scales = out["scales"][0]
+    rotations = out["rotations"][0]
+    opacities = out["opacities"][0]
+    colors = out["colors"][0]
+    depth = out["depth"]
 
-    # render at feature resolution first
     _, _, H_full, W_full = target_img.shape
     Hf, Wf = depth.shape[-2:]
 
@@ -78,7 +72,7 @@ def train_one_step(model, optimizer, scene, device="cuda", n_input=3, emit_strid
         K=target_K_small,
         H=Hf,
         W=Wf,
-    ).unsqueeze(0)  # [1,3,Hf,Wf]
+    ).unsqueeze(0)
 
     ref_small = F.interpolate(
         input_imgs[:, 0], size=(Hf, Wf),
@@ -109,19 +103,23 @@ def train_re10k(
     emit_stride=2,
     max_scenes_per_epoch=None,
     save_dir="outputs/re10k_debug",
+    run_id=0,
+    resume=False,
 ):
+
+    save_dir = os.path.join(save_dir, f"run_{run_id}")
     os.makedirs(save_dir, exist_ok=True)
 
     dataset = RealEstate10KDataset(data_root)
-
+    print("loading datasets...\n")
     loader = DataLoader(
         dataset,
         batch_size=1,
         shuffle=True,
-        num_workers=0,     # start simple
+        num_workers=0,
         collate_fn=identity_collate,
     )
-
+    print("loading model...\n")
     model = MultiViewDinoDepthToGaussians(
         dino_name="facebook/dinov2-base",
         freeze_dino=True,
@@ -130,18 +128,33 @@ def train_re10k(
         depth_max=20.0,
         feat_reduce_dim=128,
     ).to(device)
-
+    print("init training...\n")
     optimizer = torch.optim.AdamW(
         [p for p in model.parameters() if p.requires_grad],
         lr=lr,
         weight_decay=1e-4,
     )
 
-    for ep in range(epochs):
+    start_epoch = 0
+
+    if resume:
+        ckpts = [f for f in os.listdir(save_dir) if f.endswith(".pth")]
+        if len(ckpts) > 0:
+            ckpts.sort()
+            latest = os.path.join(save_dir, ckpts[-1])
+            print("Resuming from:", latest)
+
+            ckpt = torch.load(latest, map_location=device)
+            model.load_state_dict(ckpt["model"])
+            optimizer.load_state_dict(ckpt["optimizer"])
+            start_epoch = ckpt["epoch"]
+    print("start trainingg ...\n")
+    for ep in range(start_epoch, epochs):
         total_loss_val = 0.0
         steps = 0
 
-        for i, scene in enumerate(loader):
+        for i, scene in enumerate(tqdm(loader, desc=f"Epoch {ep+1}")):
+
             if max_scenes_per_epoch is not None and i >= max_scenes_per_epoch:
                 break
 
@@ -189,7 +202,7 @@ def train_re10k(
 
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
+    print("start...\n")
     train_re10k(
         data_root="datasets/realestate10k_subset",
         epochs=10,
@@ -197,6 +210,8 @@ if __name__ == "__main__":
         lr=1e-4,
         n_input=3,
         emit_stride=2,
-        max_scenes_per_epoch=100,   # good for debugging
+        max_scenes_per_epoch=100,
         save_dir="outputs/re10k_debug",
+        run_id=0,
+        resume=False,
     )

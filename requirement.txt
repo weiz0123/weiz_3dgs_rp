@@ -29,7 +29,7 @@ yt-dlp
 transformers
 huggingface-hub
 accelerate
-datasets
+#datasets
 safetensors
 tokenizers
 sentencepiece
