@@ -228,7 +228,6 @@ class DinoV2DenseEncoder(nn.Module):
             )
 
         feat = patch.view(B2, gh, gw, C).permute(0, 3, 1, 2).contiguous()
-        feat = F.interpolate(feat, size=(H, W), mode="bilinear", align_corners=False)
 
         return feat, cls
 # =========================================================

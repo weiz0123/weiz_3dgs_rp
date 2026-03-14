@@ -10,20 +10,21 @@ def intrinsics_to_pixel(K: torch.Tensor, H: int, W: int):
     return Kp
 
 
-def scene_to_model_inputs(scene, device="cuda", target_mode="middle", exclude_target=True):
-    """
-    Directly converts one scene dict from RealEstate10KDataset
-    into model-ready tensors.
-    """
-    images = scene["images"]         # [T,3,H,W]
-    Ks = scene["intrinsics"]         # [T,3,3] normalized
-    poses = scene["poses"]           # [T,4,4]
-    timestamps = scene["timestamps"] # [T]
+def scene_to_model_inputs(
+    scene,
+    device="cuda",
+    target_mode="middle",
+    exclude_target=True,
+    n_input=3,
+):
+    images = scene["images"]
+    Ks = scene["intrinsics"]
+    poses = scene["poses"]
+    timestamps = scene["timestamps"]
 
     T, _, H, W = images.shape
     Ks = intrinsics_to_pixel(Ks, H, W)
 
-    # choose target frame
     if target_mode == "middle":
         target_id = T // 2
     elif target_mode == "random":
@@ -32,17 +33,21 @@ def scene_to_model_inputs(scene, device="cuda", target_mode="middle", exclude_ta
         raise ValueError(f"Unknown target_mode: {target_mode}")
 
     if exclude_target:
-        input_ids = [i for i in range(T) if i != target_id]
+        candidate_ids = [i for i in range(T) if i != target_id]
     else:
-        input_ids = list(range(T))
+        candidate_ids = list(range(T))
 
-    input_imgs = images[input_ids].unsqueeze(0).to(device)   # [1,V,3,H,W]
-    input_Ks = Ks[input_ids].unsqueeze(0).to(device)         # [1,V,3,3]
-    input_poses = poses[input_ids].unsqueeze(0).to(device)   # [1,V,4,4]
+    # choose only a few nearest frames
+    candidate_ids = sorted(candidate_ids, key=lambda i: abs(i - target_id))
+    input_ids = candidate_ids[: min(n_input, len(candidate_ids))]
 
-    target_img = images[target_id].unsqueeze(0).to(device)   # [1,3,H,W]
-    target_K = Ks[target_id].to(device)                      # [3,3]
-    target_pose = poses[target_id].to(device)                # [4,4]
+    input_imgs = images[input_ids].unsqueeze(0).to(device)
+    input_Ks = Ks[input_ids].unsqueeze(0).to(device)
+    input_poses = poses[input_ids].unsqueeze(0).to(device)
+
+    target_img = images[target_id].unsqueeze(0).to(device)
+    target_K = Ks[target_id].to(device)
+    target_pose = poses[target_id].to(device)
 
     meta = {
         "scene_name": scene["scene"],
