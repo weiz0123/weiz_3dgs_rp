@@ -16,23 +16,16 @@ def make_pixel_grid(B, H, W, device, dtype=torch.float32):
         indexing="ij"
     )
     ones = torch.ones_like(xs)
-    grid = torch.stack([xs, ys, ones], dim=0)   # [3,H,W]
-    grid = grid.unsqueeze(0).repeat(B, 1, 1, 1) # [B,3,H,W]
+    grid = torch.stack([xs, ys, ones], dim=0)
+    grid = grid.unsqueeze(0).repeat(B, 1, 1, 1)
     return grid
 
 
 def invert_pose(c2w: torch.Tensor):
-    """
-    c2w: [B,4,4]
-    returns w2c: [B,4,4]
-    """
     return torch.inverse(c2w)
 
 
 def scale_intrinsics_batch(K: torch.Tensor, src_hw, dst_hw):
-    """
-    K: [B,3,3]
-    """
     Hs, Ws = src_hw
     Hd, Wd = dst_hw
     sx = Wd / float(Ws)
@@ -47,59 +40,45 @@ def scale_intrinsics_batch(K: torch.Tensor, src_hw, dst_hw):
 
 
 def unproject_depth(depth: torch.Tensor, K: torch.Tensor):
-    """
-    depth: [B,1,H,W]
-    K:     [B,3,3]
-    returns X_cam: [B,3,H,W]
-    """
     B, _, H, W = depth.shape
     device = depth.device
     dtype = depth.dtype
 
-    pix = make_pixel_grid(B, H, W, device, dtype)  # [B,3,H,W]
-    pix = pix.view(B, 3, -1)                        # [B,3,HW]
+    pix = make_pixel_grid(B, H, W, device, dtype)
+    pix = pix.reshape(B, 3, -1)
 
-    Kinv = torch.inverse(K)                         # [B,3,3]
-    rays = Kinv @ pix                               # [B,3,HW]
-    X = rays * depth.view(B, 1, -1)
-    return X.view(B, 3, H, W)
+    Kinv = torch.inverse(K)
+    rays = Kinv @ pix
+    X = rays * depth.reshape(B, 1, -1)
+
+    return X.reshape(B, 3, H, W)
 
 
 def cam_to_world_grid(X_cam: torch.Tensor, c2w: torch.Tensor):
-    """
-    X_cam: [B,3,H,W]
-    c2w:   [B,4,4]
-    returns X_world: [B,3,H,W]
-    """
     B, _, H, W = X_cam.shape
-    X_flat = X_cam.view(B, 3, -1)
+
+    X_flat = X_cam.reshape(B, 3, -1)
     ones = torch.ones(B, 1, H * W, device=X_cam.device, dtype=X_cam.dtype)
-    Xh = torch.cat([X_flat, ones], dim=1)          # [B,4,HW]
-    Xw = c2w @ Xh                                  # [B,4,HW]
-    return Xw[:, :3].view(B, 3, H, W)
+    Xh = torch.cat([X_flat, ones], dim=1)
+
+    Xw = c2w @ Xh
+    return Xw[:, :3].reshape(B, 3, H, W)
 
 
 def world_to_cam_grid(X_world: torch.Tensor, w2c: torch.Tensor):
-    """
-    X_world: [B,3,H,W]
-    w2c:     [B,4,4]
-    returns X_cam: [B,3,H,W]
-    """
     B, _, H, W = X_world.shape
-    X_flat = X_world.view(B, 3, -1)
+
+    X_flat = X_world.reshape(B, 3, -1)
     ones = torch.ones(B, 1, H * W, device=X_world.device, dtype=X_world.dtype)
     Xh = torch.cat([X_flat, ones], dim=1)
+
     Xc = w2c @ Xh
-    return Xc[:, :3].view(B, 3, H, W)
+    return Xc[:, :3].reshape(B, 3, H, W)
 
 
 def project_points_grid(X_cam: torch.Tensor, K: torch.Tensor, eps=1e-6):
-    """
-    X_cam: [B,3,H,W]
-    K:     [B,3,3]
-    returns uv: [B,H,W,2] in pixels
-    """
     B, _, H, W = X_cam.shape
+
     x = X_cam[:, 0]
     y = X_cam[:, 1]
     z = X_cam[:, 2].clamp(min=eps)
@@ -112,62 +91,54 @@ def project_points_grid(X_cam: torch.Tensor, K: torch.Tensor, eps=1e-6):
     u = fx * (x / z) + cx
     v = fy * (y / z) + cy
 
-    return torch.stack([u, v], dim=-1)  # [B,H,W,2]
+    return torch.stack([u, v], dim=-1)
 
 
 def uv_to_grid(uv: torch.Tensor, H: int, W: int):
-    """
-    uv: [B,H,W,2] in pixels
-    returns grid for grid_sample: [B,H,W,2] in [-1,1]
-    """
     u = uv[..., 0]
     v = uv[..., 1]
 
     gx = 2.0 * (u / max(W - 1, 1)) - 1.0
     gy = 2.0 * (v / max(H - 1, 1)) - 1.0
+
     return torch.stack([gx, gy], dim=-1)
 
 
 def warp_feature_to_ref_plane(
-    src_feat: torch.Tensor,
-    depth_plane: torch.Tensor,
-    K_ref: torch.Tensor,
-    c2w_ref: torch.Tensor,
-    K_src: torch.Tensor,
-    c2w_src: torch.Tensor,
+    src_feat,
+    depth_plane,
+    K_ref,
+    c2w_ref,
+    K_src,
+    c2w_src,
 ):
-    """
-    Warp src_feat into reference view under a fixed reference depth plane.
 
-    src_feat:    [B,C,H,W]
-    depth_plane: [B,1,H,W] or scalar expanded
-    returns:
-        warped_src_feat [B,C,H,W]
-        valid_mask      [B,1,H,W]
-    """
     B, C, H, W = src_feat.shape
 
-    # ref pixels + hypothetical depth -> ref camera 3D
-    X_ref_cam = unproject_depth(depth_plane, K_ref)              # [B,3,H,W]
+    X_ref_cam = unproject_depth(depth_plane, K_ref)
 
-    # ref cam -> world -> src cam
     X_world = cam_to_world_grid(X_ref_cam, c2w_ref)
     w2c_src = invert_pose(c2w_src)
     X_src_cam = world_to_cam_grid(X_world, w2c_src)
 
-    # project into source
-    uv_src = project_points_grid(X_src_cam, K_src)               # [B,H,W,2]
+    uv_src = project_points_grid(X_src_cam, K_src)
     grid = uv_to_grid(uv_src, H, W)
 
     warped = F.grid_sample(
-        src_feat, grid, mode="bilinear",
-        padding_mode="zeros", align_corners=True
+        src_feat,
+        grid,
+        mode="bilinear",
+        padding_mode="zeros",
+        align_corners=True
     )
 
     z = X_src_cam[:, 2:3]
+
     valid = (
-        (grid[..., 0] >= -1.0) & (grid[..., 0] <= 1.0) &
-        (grid[..., 1] >= -1.0) & (grid[..., 1] <= 1.0) &
+        (grid[..., 0] >= -1.0) &
+        (grid[..., 0] <= 1.0) &
+        (grid[..., 1] >= -1.0) &
+        (grid[..., 1] <= 1.0) &
         (z[:, 0] > 1e-6)
     ).unsqueeze(1).float()
 
@@ -175,12 +146,19 @@ def warp_feature_to_ref_plane(
 
 
 # =========================================================
-# DINOv2 dense backbone
+# DINOv2 encoder
 # =========================================================
+
 class DinoV2DenseEncoder(nn.Module):
+
     def __init__(self, model_name="facebook/dinov2-base", freeze=True):
         super().__init__()
-        self.backbone = Dinov2Model.from_pretrained(model_name, output_hidden_states=True)
+
+        self.backbone = Dinov2Model.from_pretrained(
+            model_name,
+            output_hidden_states=True
+        )
+
         self.hidden_dim = self.backbone.config.hidden_size
         self.patch_size = self.backbone.config.patch_size
 
@@ -190,113 +168,132 @@ class DinoV2DenseEncoder(nn.Module):
 
         self.register_buffer(
             "mean",
-            torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1),
+            torch.tensor([0.485, 0.456, 0.406]).view(1,3,1,1),
             persistent=False
         )
+
         self.register_buffer(
             "std",
-            torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1),
+            torch.tensor([0.229,0.224,0.225]).view(1,3,1,1),
             persistent=False
         )
 
+
     def forward(self, x):
-        """
-        x: [B,3,H,W] in [0,1]
-        returns:
-            feat_map [B,C,H,W]
-            cls      [B,C]
-        """
-        B, _, H, W = x.shape
 
-        x = (x - self.mean) / self.std
-        out = self.backbone(pixel_values=x, output_hidden_states=True)
+        B,_,H,W = x.shape
 
-        hs = out.hidden_states[-1]   # [B, 1+N, C]
-        cls = hs[:, 0]               # [B, C]
-        patch = hs[:, 1:]            # [B, N, C]
+        x = (x-self.mean)/self.std
 
-        B2, N, C = patch.shape
+        out = self.backbone(pixel_values=x,output_hidden_states=True)
 
-        gh = H // self.patch_size
-        gw = W // self.patch_size
+        hs = out.hidden_states[-1]
 
-        if gh * gw != N:
+        cls = hs[:,0]
+        patch = hs[:,1:]
+
+        B2,N,C = patch.shape
+
+        gh = H//self.patch_size
+        gw = W//self.patch_size
+
+        if gh*gw != N:
             raise ValueError(
-                f"DINO token reshape mismatch: H={H}, W={W}, "
-                f"patch={self.patch_size}, gh={gh}, gw={gw}, "
-                f"gh*gw={gh*gw}, but N={N}"
+                f"DINO reshape mismatch H={H} W={W} gh={gh} gw={gw} N={N}"
             )
 
-        feat = patch.view(B2, gh, gw, C).permute(0, 3, 1, 2).contiguous()
+        feat = patch.reshape(B2,gh,gw,C).permute(0,3,1,2).contiguous()
 
-        return feat, cls
+        return feat,cls
+
+
 # =========================================================
-# Cost volume builder
+# Cost volume
 # =========================================================
 
 class PlaneSweepCostVolume(nn.Module):
-    def __init__(self, num_depth_bins=32, depth_min=0.5, depth_max=15.0):
-        super().__init__()
-        self.num_depth_bins = num_depth_bins
-        self.depth_min = depth_min
-        self.depth_max = depth_max
 
-    def get_depth_planes(self, B, H, W, device, dtype):
-        # inverse-depth sampling is usually better
-        inv_min = 1.0 / self.depth_max
-        inv_max = 1.0 / self.depth_min
-        inv = torch.linspace(inv_min, inv_max, self.num_depth_bins, device=device, dtype=dtype)
-        depth = 1.0 / inv
-        depth = depth.view(1, self.num_depth_bins, 1, 1).expand(B, self.num_depth_bins, H, W)
+    def __init__(self,num_depth_bins=32,depth_min=0.5,depth_max=15.0):
+        super().__init__()
+
+        self.num_depth_bins=num_depth_bins
+        self.depth_min=depth_min
+        self.depth_max=depth_max
+
+
+    def get_depth_planes(self,B,H,W,device,dtype):
+
+        inv_min = 1.0/self.depth_max
+        inv_max = 1.0/self.depth_min
+
+        inv = torch.linspace(
+            inv_min,
+            inv_max,
+            self.num_depth_bins,
+            device=device,
+            dtype=dtype
+        )
+
+        depth = 1.0/inv
+
+        depth = depth.view(1,self.num_depth_bins,1,1).expand(B,self.num_depth_bins,H,W)
+
         return depth
 
-    def forward(self, ref_feat, src_feats, K_ref, c2w_ref, K_srcs, c2w_srcs):
-        """
-        ref_feat:  [B,C,H,W]
-        src_feats: [B,Vs,C,H,W]
-        K_srcs:    [B,Vs,3,3]
-        c2w_srcs:  [B,Vs,4,4]
 
-        returns:
-            cost_volume   [B,D,H,W]
-            src_agg_feat  [B,C,H,W]  # feature warped at estimated depth later, placeholder now
-            depth_planes  [B,D,H,W]
-        """
-        B, C, H, W = ref_feat.shape
+    def forward(self,ref_feat,src_feats,K_ref,c2w_ref,K_srcs,c2w_srcs):
+
+        B,C,H,W = ref_feat.shape
         Vs = src_feats.shape[1]
-        device = ref_feat.device
-        dtype = ref_feat.dtype
 
-        depth_planes = self.get_depth_planes(B, H, W, device, dtype)   # [B,D,H,W]
+        device=ref_feat.device
+        dtype=ref_feat.dtype
 
-        ref_feat_n = F.normalize(ref_feat, dim=1)
-        cost_slices = []
+        depth_planes = self.get_depth_planes(B,H,W,device,dtype)
+
+        ref_feat_n = F.normalize(ref_feat,dim=1)
+
+        cost_slices=[]
 
         for d in range(self.num_depth_bins):
-            plane = depth_planes[:, d:d+1]  # [B,1,H,W]
 
-            sims = []
+            plane = depth_planes[:,d:d+1]
+
+            sims=[]
+
             for s in range(Vs):
-                warped_src, valid = warp_feature_to_ref_plane(
-                    src_feat=src_feats[:, s],
+
+                warped_src,valid = warp_feature_to_ref_plane(
+                    src_feat=src_feats[:,s],
                     depth_plane=plane,
                     K_ref=K_ref,
                     c2w_ref=c2w_ref,
-                    K_src=K_srcs[:, s],
-                    c2w_src=c2w_srcs[:, s],
+                    K_src=K_srcs[:,s],
+                    c2w_src=c2w_srcs[:,s]
                 )
-                warped_src_n = F.normalize(warped_src, dim=1)
-                sim = (ref_feat_n * warped_src_n).sum(dim=1, keepdim=True)  # [B,1,H,W]
-                sim = sim * valid
+
+                warped_src_n = F.normalize(warped_src,dim=1)
+
+                sim = (ref_feat_n*warped_src_n).sum(dim=1,keepdim=True)
+
+                sim = sim*valid
+
                 sims.append(sim)
 
-            sim_stack = torch.stack(sims, dim=1)    # [B,Vs,1,H,W]
-            sim_mean = sim_stack.mean(dim=1)        # [B,1,H,W]
+            sim_stack=torch.stack(sims,dim=1)
+
+            sim_mean = sim_stack.mean(dim=1)
+
             cost_slices.append(sim_mean)
 
-        cost_volume = torch.cat(cost_slices, dim=1)  # [B,D,H,W]
-        return cost_volume, depth_planes
+        cost_volume = torch.cat(cost_slices,dim=1)
 
+        return cost_volume,depth_planes
+
+
+# =========================================================
+# Remaining model code unchanged
+# =========================================================
 
 # =========================================================
 # Depth/confidence head
@@ -590,7 +587,7 @@ class MultiViewDinoDepthToGaussians(nn.Module):
         B2, _, Hg, Wg = X_world.shape
         M = Hg * Wg
 
-        means3D = X_world.view(B2, 3, M).permute(0, 2, 1).contiguous()
+        means3D = X_world.reshape(B2, 3, M).permute(0, 2, 1).contiguous()
         scales = scales.view(B2, 3, M).permute(0, 2, 1).contiguous()
         rotations = quat.view(B2, 4, M).permute(0, 2, 1).contiguous()
         opacities = opacity.view(B2, 1, M).permute(0, 2, 1).contiguous()
