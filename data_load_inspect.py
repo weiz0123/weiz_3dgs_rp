@@ -10,7 +10,6 @@ print("images shape:", scene["images"].shape)
 print("intrinsics shape:", scene["intrinsics"].shape)
 print("poses shape:", scene["poses"].shape)
 
-
 # -------------------------------------------------
 # Example values
 # -------------------------------------------------

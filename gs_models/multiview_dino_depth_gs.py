@@ -24,7 +24,7 @@ def make_pixel_grid(B, H, W, device, dtype=torch.float32):
 def invert_pose(c2w: torch.Tensor):
     return torch.inverse(c2w)
 
-
+# to convert target image to a size of model moutput
 def scale_intrinsics_batch(K: torch.Tensor, src_hw, dst_hw):
     Hs, Ws = src_hw
     Hd, Wd = dst_hw
@@ -480,11 +480,13 @@ class MultiViewDinoDepthToGaussians(nn.Module):
             depth_min=depth_min,
             depth_max=depth_max,
         )
+
         self.depth_head = DepthConfidenceHead(
             feat_dim=feat_reduce_dim,
             num_depth_bins=num_depth_bins,
             hidden=128
         )
+        
         self.gaussian_head = GaussianHead(
             ref_feat_dim=feat_reduce_dim,
             fused_dim=128,
@@ -588,11 +590,11 @@ class MultiViewDinoDepthToGaussians(nn.Module):
         M = Hg * Wg
 
         means3D = X_world.reshape(B2, 3, M).permute(0, 2, 1).contiguous()
-        scales = scales.view(B2, 3, M).permute(0, 2, 1).contiguous()
-        rotations = quat.view(B2, 4, M).permute(0, 2, 1).contiguous()
-        opacities = opacity.view(B2, 1, M).permute(0, 2, 1).contiguous()
-        colors = color.view(B2, 3, M).permute(0, 2, 1).contiguous()
-        conf_flat = conf.view(B2, 1, M).permute(0, 2, 1).contiguous()
+        scales = scales.reshape(B2, 3, M).permute(0, 2, 1).contiguous()
+        rotations = quat.reshape(B2, 4, M).permute(0, 2, 1).contiguous()
+        opacities = opacity.reshape(B2, 1, M).permute(0, 2, 1).contiguous()
+        colors = color.reshape(B2, 3, M).permute(0, 2, 1).contiguous()
+        conf_flat = conf.reshape(B2, 1, M).permute(0, 2, 1).contiguous()
 
         return {
             "depth": depth,                 # [B,1,Hf,Wf]

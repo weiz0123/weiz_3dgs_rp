@@ -1,7 +1,28 @@
 import random
 import torch
+import torchvision.utils as vutils
+import os
+import torch
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+import torchvision.utils as vutils
+from PIL import Image
+from pipeline.data_loader import RealEstate10KDataset
+
 
 def intrinsics_to_pixel(K: torch.Tensor, H: int, W: int):
+    '''
+        fx ≈ 0.49
+        fy ≈ 0.87
+        cx ≈ 0.5
+        cy ≈ 0.5
+            need to be noramlized
+        fx_pixel = fx * W
+        fy_pixel = fy * H
+        cx_pixel = cx * W
+        cy_pixel = cy * H
+    '''
     Kp = K.clone()
     Kp[:, 0, 0] *= W
     Kp[:, 1, 1] *= H
@@ -17,6 +38,7 @@ def scene_to_model_inputs(
     exclude_target=True,
     n_input=3,
 ):
+    # extract raw data from scene (i.e in example)
     images = scene["images"]
     Ks = scene["intrinsics"]
     poses = scene["poses"]
@@ -25,6 +47,7 @@ def scene_to_model_inputs(
     T, _, H, W = images.shape
     Ks = intrinsics_to_pixel(Ks, H, W)
 
+    # target_id
     if target_mode == "middle":
         target_id = T // 2
     elif target_mode == "random":
@@ -32,6 +55,7 @@ def scene_to_model_inputs(
     else:
         raise ValueError(f"Unknown target_mode: {target_mode}")
 
+    # candidate_id
     if exclude_target:
         candidate_ids = [i for i in range(T) if i != target_id]
     else:
@@ -58,3 +82,41 @@ def scene_to_model_inputs(
     }
 
     return input_imgs, input_Ks, input_poses, target_img, target_K, target_pose, meta
+
+
+
+def save_visuals(save_dir, epoch, scene_idx,
+                 input_imgs, target_img, rendered, depth):
+    """
+    Save input views, target view and rendered output.
+    """
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    folder = os.path.join(save_dir, f"epoch_{epoch:03d}_scene_{scene_idx:04d}")
+    os.makedirs(folder, exist_ok=True)
+
+    # save input views
+    inputs = input_imgs[0]  # [V,3,H,W]
+    for i in range(inputs.shape[0]):
+        vutils.save_image(
+            inputs[i],
+            os.path.join(folder, f"input_{i}.png")
+        )
+
+    # target image
+    vutils.save_image(target_img[0],
+        os.path.join(folder, "target.png")
+    )
+
+    # rendered image
+    vutils.save_image(rendered[0].clamp(0,1),
+        os.path.join(folder, "rendered.png")
+    )
+
+    # depth (normalize for visualization)
+    d = depth[0,0]
+    d = (d - d.min()) / (d.max() - d.min() + 1e-6)
+    Image.fromarray((d.cpu().numpy()*255).astype("uint8")).save(
+        os.path.join(folder, "depth.png")
+    )

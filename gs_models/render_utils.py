@@ -48,20 +48,26 @@ def rasterize_gaussians_single(
         campos=campos,
         prefiltered=False,
         debug=False,
-        antialiasing=False,
+    
     )
 
     rasterizer = GaussianRasterizer(settings)
     means2D = torch.zeros_like(means3D)
 
-    rendered, _, _ = rasterizer(
-        means3D=means3D,
-        means2D=means2D,
-        shs=None,
-        colors_precomp=colors,
-        opacities=opacities,
-        scales=scales,
-        rotations=rotations,
-        cov3D_precomp=None,
-    )
-    return rendered
+    try:
+        rendered, _ = rasterizer(
+            means3D=means3D,
+            means2D=means2D,
+            shs=None,
+            colors_precomp=colors,
+            opacities=opacities,
+            scales=scales,
+            rotations=rotations,
+            cov3D_precomp=None,
+        )
+        return rendered
+    except Exception as e:
+        print("Rasterizer failure:", e)
+        return None
+
+        
