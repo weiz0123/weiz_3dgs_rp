@@ -9,31 +9,55 @@ from PIL import Image
 from pipeline.data_loader import RealEstate10KDataset
 from gs_models.multiview_dino_depth_gs import (
     MultiViewDinoDepthToGaussians,
-    scale_intrinsics_batch,
 )
 from gs_models.losses import total_loss
 from gs_models.render_utils import rasterize_gaussians_single
 from train_re10k_utils import scene_to_model_inputs
 from train_re10k_utils import save_visuals
 
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+def scene_collate(batch):
+    return batch
 
-def identity_collate(batch):
-    return batch[0]
-
-
-def train_one_step(model, optimizer, scene, device="cuda", n_input=3, emit_stride=8):
+def train_one_step(model, optimizer, scene_batch, device="cuda", n_input=3, emit_stride=1):
     model.train()
     optimizer.zero_grad(set_to_none=True)
 
-    (
-        input_imgs, # number of input imgs depends on the n_input
-        input_Ks,
-        input_poses,
-        target_img,
-        target_K,
-        target_pose,
-        meta,
-    ) = scene_to_model_inputs(scene, device=device, n_input=n_input)  # one scene with m frames
+    batch_inputs = []
+    batch_Ks = []
+    batch_poses = []
+    batch_targets = []
+    batch_target_K = []
+    batch_target_pose = []
+    metas = []
+
+    for scene in scene_batch:
+
+        (
+            input_imgs,
+            input_Ks,
+            input_poses,
+            target_img,
+            target_K,
+            target_pose,
+            meta,
+        ) = scene_to_model_inputs(scene, device=device, n_input=n_input)
+
+        batch_inputs.append(input_imgs)
+        batch_Ks.append(input_Ks)
+        batch_poses.append(input_poses)
+        batch_targets.append(target_img)
+        batch_target_K.append(target_K)
+        batch_target_pose.append(target_pose)
+        metas.append(meta)
+
+    input_imgs = torch.cat(batch_inputs, dim=0)
+    input_Ks = torch.cat(batch_Ks, dim=0)
+    input_poses = torch.cat(batch_poses, dim=0)
+    target_img = torch.cat(batch_targets, dim=0)
+    target_K = torch.stack(batch_target_K)
+    target_pose = torch.stack(batch_target_pose)
 
     out = model(
         imgs=input_imgs,
@@ -43,44 +67,46 @@ def train_one_step(model, optimizer, scene, device="cuda", n_input=3, emit_strid
         emit_stride=emit_stride,
     )
 
-    means3D = out["means3D"][0].reshape(-1, 3).contiguous()
-    scales = out["scales"][0].reshape(-1, 3).contiguous()
-    rotations = out["rotations"][0].reshape(-1, 4).contiguous()
-    opacities = out["opacities"][0].reshape(-1, 1).contiguous()
-    colors = out["colors"][0].reshape(-1, 3).contiguous()
+    B = input_imgs.shape[0]
 
-    _, _, H_full, W_full = target_img.shape
+    rendered_list = []
+
+    for b in range(B):
+
+        means3D = out["means3D"][b].reshape(-1, 3).contiguous()
+        scales = out["scales"][b].reshape(-1, 3).contiguous()
+        rotations = out["rotations"][b].reshape(-1, 4).contiguous()
+        opacities = out["opacities"][b].reshape(-1, 1).contiguous()
+        colors = out["colors"][b].reshape(-1, 3).contiguous()
+
+        _, _, H_full, W_full = target_img[b:b+1].shape
+        depth = out["depth"][b:b+1]
+        Hf, Wf = depth.shape[-2:]
+
+        rendered = rasterize_gaussians_single(
+            means3D=means3D,
+            scales=scales,
+            rotations=rotations,
+            opacities=opacities,
+            colors=colors,
+            pose_c2w=target_pose[b],
+            K=target_K[b],
+            H=H_full,
+            W=W_full,
+        )
+
+        if rendered is None:
+            raise RuntimeError("Rasterization failed")
+        else:
+            rendered = rendered.unsqueeze(0)
+
+        rendered_list.append(rendered)
+
+    rendered = torch.cat(rendered_list, dim=0)
+
     depth = out["depth"]
-    Hf, Wf = depth.shape[-2:]
 
-    target_small = F.interpolate(
-        target_img,
-        size=(Hf, Wf),
-        mode="bilinear",
-        align_corners=False,
-    )
-
-    target_K_small = scale_intrinsics_batch(
-        target_K.unsqueeze(0),
-        src_hw=(H_full, W_full),
-        dst_hw=(Hf, Wf),
-    )[0]
-
-    rendered = rasterize_gaussians_single(
-        means3D=means3D,
-        scales=scales,
-        rotations=rotations,
-        opacities=opacities,
-        colors=colors,
-        pose_c2w=target_pose,
-        K=target_K_small,
-        H=Hf,
-        W=Wf,
-    )
-    if rendered is None:
-        raise RuntimeError("Rasterization failed")
-    else:
-        rendered = rendered.unsqueeze(0)
+    _, _, Hf, Wf = depth.shape
 
     ref_small = F.interpolate(
         input_imgs[:, 0],
@@ -91,19 +117,17 @@ def train_one_step(model, optimizer, scene, device="cuda", n_input=3, emit_strid
 
     loss, stats = total_loss(
         rendered=rendered,
-        target=target_small,
+        target=target_img,
         depth=depth,
         ref_img_small=ref_small,
-        scales=scales,
-        opacities=opacities,
+        scales=out["scales"].reshape(-1,3),
+        opacities=out["opacities"].reshape(-1,1),
     )
 
     loss.backward()
     optimizer.step()
 
-
-    return stats, meta, rendered.detach(), target_small.detach(), depth.detach(), input_imgs.detach()
-
+    return stats, metas[0], rendered.detach(), target_img.detach(), depth.detach(), input_imgs.detach()
 
 def train_re10k(
     data_root="datasets/realestate10k_subset",
@@ -111,7 +135,7 @@ def train_re10k(
     device="cuda",
     lr=1e-4,
     n_input=3,
-    emit_stride=8,
+    emit_stride=1,
     max_scenes_per_epoch=None,
     save_dir="outputs/re10k_debug",
     run_id=0,
@@ -126,20 +150,21 @@ def train_re10k(
   
     loader = DataLoader(
         dataset,
-        batch_size=64,
+        batch_size=1,
         shuffle=True,
-        num_workers=8,
-        collate_fn=identity_collate,
+        num_workers=2,
+        pin_memory=True,
+        collate_fn=scene_collate,
     )
 
     print("loading model...\n")
     model = MultiViewDinoDepthToGaussians(
         dino_name="facebook/dinov2-base",
         freeze_dino=True,
-        num_depth_bins=225,
+        num_depth_bins=96,
         depth_min=0.5,
         depth_max=20.0,
-        feat_reduce_dim=64,
+        feat_reduce_dim=128,
     ).to(device)
 
     print("init training...\n")
@@ -152,10 +177,12 @@ def train_re10k(
     start_epoch = 0
 
     if resume:
-        ckpts = [f for f in os.listdir(save_dir) if f.endswith(".pth")]
+        ckpts = [f for f in os.listdir(save_dir) if f.startswith("model_epoch_") and f.endswith(".pth")]
+
         if ckpts:
-            ckpts.sort()
+            ckpts.sort(key=lambda x: int(x.split("_")[-1].split(".")[0]))
             latest = os.path.join(save_dir, ckpts[-1])
+
             print("Resuming from:", latest)
 
             ckpt = torch.load(latest, map_location=device)
@@ -169,15 +196,15 @@ def train_re10k(
         total_loss_val = 0.0
         steps = 0
 
-        for i, scene in enumerate(tqdm(loader, desc=f"Epoch {ep+1}")):
+        for i, scene_batch in enumerate(tqdm(loader, desc=f"Epoch {ep+1}")):
             if max_scenes_per_epoch is not None and i >= max_scenes_per_epoch:
                 break
 
             try:
-                stats, meta, rendered, target_small, depth, input_imgs = train_one_step(
+                stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
                     model=model,
                     optimizer=optimizer,
-                    scene=scene,
+                    scene_batch=scene_batch,
                     device=device,
                     n_input=n_input, # number of input view
                     emit_stride=emit_stride,  # one guassian / emit_stride pixels
@@ -206,12 +233,12 @@ def train_re10k(
                         epoch=ep,
                         scene_idx=i,
                         input_imgs=input_imgs.cpu(),
-                        target_img=target_small.cpu(),
+                        target_img=target_out.cpu(),
                         rendered=rendered.cpu(),
                         depth=depth.cpu(),
     )
             except Exception as e:
-                print(f"Skipping scene {i} ({scene['scene']}): {e}")
+                print(f"Skipping scene {i} : {e}")
                 torch.cuda.empty_cache()
                 traceback.print_exc()
                 continue
@@ -240,12 +267,12 @@ if __name__ == "__main__":
 
     train_re10k(
         data_root="datasets/realestate10k_subset",
-        epochs=100,
+        epochs=400,
         device=device,
         lr=1e-4,
-        n_input=20,
+        n_input=4,
         emit_stride=1,
-        max_scenes_per_epoch=500,
+        max_scenes_per_epoch=200,
         save_dir="outputs/re10k_debug",
         run_id=0,
         resume=True,

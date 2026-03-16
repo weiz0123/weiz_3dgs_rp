@@ -38,7 +38,76 @@ def scene_to_model_inputs(
     exclude_target=True,
     n_input=3,
 ):
-    # extract raw data from scene (i.e in example)
+
+    # -------------------------------------------------
+    # Handle batch automatically
+    # -------------------------------------------------
+
+    if isinstance(scene, list):
+
+        imgs = []
+        Ks_out = []
+        poses_out = []
+        targets = []
+        target_Ks = []
+        target_poses = []
+        metas = []
+
+        for s in scene:
+
+            images = s["images"]
+            Ks = s["intrinsics"]
+            poses = s["poses"]
+            timestamps = s["timestamps"]
+
+            T, _, H, W = images.shape
+            Ks = intrinsics_to_pixel(Ks, H, W)
+
+            if target_mode == "middle":
+                target_id = T // 2
+            elif target_mode == "random":
+                target_id = random.randint(0, T - 1)
+            else:
+                raise ValueError(f"Unknown target_mode: {target_mode}")
+
+            if exclude_target:
+                candidate_ids = [i for i in range(T) if i != target_id]
+            else:
+                candidate_ids = list(range(T))
+
+            candidate_ids = sorted(candidate_ids, key=lambda i: abs(i - target_id))
+            input_ids = candidate_ids[: min(n_input, len(candidate_ids))]
+
+            imgs.append(images[input_ids])
+            Ks_out.append(Ks[input_ids])
+            poses_out.append(poses[input_ids])
+
+            targets.append(images[target_id])
+            target_Ks.append(Ks[target_id])
+            target_poses.append(poses[target_id])
+
+            metas.append({
+                "scene_name": s["scene"],
+                "target_id": target_id,
+                "input_ids": input_ids,
+                "target_timestamp": timestamps[target_id],
+                "image_hw": (H, W),
+            })
+
+        input_imgs = torch.stack(imgs).to(device)
+        input_Ks = torch.stack(Ks_out).to(device)
+        input_poses = torch.stack(poses_out).to(device)
+
+        target_img = torch.stack(targets).to(device)
+        target_K = torch.stack(target_Ks).to(device)
+        target_pose = torch.stack(target_poses).to(device)
+
+        return input_imgs, input_Ks, input_poses, target_img, target_K, target_pose, metas
+
+    # -------------------------------------------------
+    # Original single-scene logic
+    # -------------------------------------------------
+
     images = scene["images"]
     Ks = scene["intrinsics"]
     poses = scene["poses"]
@@ -47,7 +116,6 @@ def scene_to_model_inputs(
     T, _, H, W = images.shape
     Ks = intrinsics_to_pixel(Ks, H, W)
 
-    # target_id
     if target_mode == "middle":
         target_id = T // 2
     elif target_mode == "random":
@@ -55,15 +123,17 @@ def scene_to_model_inputs(
     else:
         raise ValueError(f"Unknown target_mode: {target_mode}")
 
-    # candidate_id
     if exclude_target:
         candidate_ids = [i for i in range(T) if i != target_id]
     else:
         candidate_ids = list(range(T))
 
-    # choose only a few nearest frames
     candidate_ids = sorted(candidate_ids, key=lambda i: abs(i - target_id))
-    input_ids = candidate_ids[: min(n_input, len(candidate_ids))]
+    if len(candidate_ids) >= n_input:
+        input_ids = candidate_ids[:n_input]
+    else:
+        # repeat frames if scene is too short
+        input_ids = candidate_ids + [candidate_ids[-1]] * (n_input - len(candidate_ids))
 
     input_imgs = images[input_ids].unsqueeze(0).to(device)
     input_Ks = Ks[input_ids].unsqueeze(0).to(device)
@@ -82,8 +152,6 @@ def scene_to_model_inputs(
     }
 
     return input_imgs, input_Ks, input_poses, target_img, target_K, target_pose, meta
-
-
 
 def save_visuals(save_dir, epoch, scene_idx,
                  input_imgs, target_img, rendered, depth):

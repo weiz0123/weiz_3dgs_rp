@@ -3,9 +3,9 @@
 #SBATCH --account=def-vislearn
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
-#SBATCH --time=06:00:00
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=64G
+#SBATCH --time=06:30:00
 #SBATCH --output=logs/%x-%j.out
 
 echo "===================================="
