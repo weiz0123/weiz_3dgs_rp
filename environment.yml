@@ -30,7 +30,7 @@ dependencies:
   # PyTorch + CUDA
   - pytorch = 2.7.0
   - torchvision
-  - pytorch-cuda = 12.8
+  - pytorch-cuda=12.4
 
   # useful debugging tools
   - ipython

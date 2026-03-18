@@ -2,5 +2,7 @@
     "python.analysis.extraPaths": [
         "./diff-gaussian-rasterization",
         "./gs_models"
-    ]
+    ],
+    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "python-envs.defaultPackageManager": "ms-python.python:conda"
 }
