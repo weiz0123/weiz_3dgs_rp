@@ -16,15 +16,15 @@ def make_pixel_grid(B, H, W, device, dtype=torch.float32):
         indexing="ij"
     )
     ones = torch.ones_like(xs)
-    grid = torch.stack([xs, ys, ones], dim=0)
-    grid = grid.unsqueeze(0).repeat(B, 1, 1, 1)
+    grid = torch.stack([xs, ys, ones], dim=0)   # [3,H,W]
+    grid = grid.unsqueeze(0).repeat(B, 1, 1, 1) # [B,3,H,W]
     return grid
 
 
 def invert_pose(c2w: torch.Tensor):
     return torch.inverse(c2w)
 
-# to convert target image to a size of model moutput
+
 def scale_intrinsics_batch(K: torch.Tensor, src_hw, dst_hw):
     Hs, Ws = src_hw
     Hd, Wd = dst_hw
@@ -40,43 +40,61 @@ def scale_intrinsics_batch(K: torch.Tensor, src_hw, dst_hw):
 
 
 def unproject_depth(depth: torch.Tensor, K: torch.Tensor):
+    """
+    depth: [B,1,H,W]
+    K:     [B,3,3]
+    return [B,3,H,W] in camera coordinates
+    """
     B, _, H, W = depth.shape
     device = depth.device
     dtype = depth.dtype
 
-    pix = make_pixel_grid(B, H, W, device, dtype)
-    pix = pix.reshape(B, 3, -1)
+    pix = make_pixel_grid(B, H, W, device, dtype)   # [B,3,H,W]
+    pix = pix.reshape(B, 3, -1)                     # [B,3,HW]
 
-    Kinv = torch.inverse(K)
-    rays = Kinv @ pix
-    X = rays * depth.reshape(B, 1, -1)
+    Kinv = torch.inverse(K)                         # [B,3,3]
+    rays = Kinv @ pix                               # [B,3,HW]
+    X = rays * depth.reshape(B, 1, -1)              # [B,3,HW]
 
     return X.reshape(B, 3, H, W)
 
 
 def cam_to_world_grid(X_cam: torch.Tensor, c2w: torch.Tensor):
+    """
+    X_cam: [B,3,H,W]
+    c2w:   [B,4,4]
+    """
     B, _, H, W = X_cam.shape
 
     X_flat = X_cam.reshape(B, 3, -1)
     ones = torch.ones(B, 1, H * W, device=X_cam.device, dtype=X_cam.dtype)
-    Xh = torch.cat([X_flat, ones], dim=1)
+    Xh = torch.cat([X_flat, ones], dim=1)          # [B,4,HW]
 
-    Xw = c2w @ Xh
+    Xw = c2w @ Xh                                  # [B,4,HW]
     return Xw[:, :3].reshape(B, 3, H, W)
 
 
 def world_to_cam_grid(X_world: torch.Tensor, w2c: torch.Tensor):
+    """
+    X_world: [B,3,H,W]
+    w2c:     [B,4,4]
+    """
     B, _, H, W = X_world.shape
 
     X_flat = X_world.reshape(B, 3, -1)
     ones = torch.ones(B, 1, H * W, device=X_world.device, dtype=X_world.dtype)
-    Xh = torch.cat([X_flat, ones], dim=1)
+    Xh = torch.cat([X_flat, ones], dim=1)          # [B,4,HW]
 
     Xc = w2c @ Xh
     return Xc[:, :3].reshape(B, 3, H, W)
 
 
 def project_points_grid(X_cam: torch.Tensor, K: torch.Tensor, eps=1e-6):
+    """
+    X_cam: [B,3,H,W]
+    K:     [B,3,3]
+    return uv: [B,H,W,2]
+    """
     B, _, H, W = X_cam.shape
 
     x = X_cam[:, 0]
@@ -91,10 +109,14 @@ def project_points_grid(X_cam: torch.Tensor, K: torch.Tensor, eps=1e-6):
     u = fx * (x / z) + cx
     v = fy * (y / z) + cy
 
-    return torch.stack([u, v], dim=-1)
+    return torch.stack([u, v], dim=-1)   # [B,H,W,2]
 
 
 def uv_to_grid(uv: torch.Tensor, H: int, W: int):
+    """
+    uv: [B,H,W,2] in pixel coordinates
+    return grid for grid_sample: [B,H,W,2] in [-1,1]
+    """
     u = uv[..., 0]
     v = uv[..., 1]
 
@@ -112,27 +134,37 @@ def warp_feature_to_ref_plane(
     K_src,
     c2w_src,
 ):
+    """
+    Warp src_feat into ref image plane at a given depth hypothesis.
+
+    src_feat:    [B,C,H,W]
+    depth_plane: [B,1,H,W]
+    K_ref:       [B,3,3]
+    c2w_ref:     [B,4,4]
+    K_src:       [B,3,3]
+    c2w_src:     [B,4,4]
+    """
 
     B, C, H, W = src_feat.shape
 
-    X_ref_cam = unproject_depth(depth_plane, K_ref)
+    X_ref_cam = unproject_depth(depth_plane, K_ref)       # [B,3,H,W]
+    X_world = cam_to_world_grid(X_ref_cam, c2w_ref)       # [B,3,H,W]
 
-    X_world = cam_to_world_grid(X_ref_cam, c2w_ref)
     w2c_src = invert_pose(c2w_src)
-    X_src_cam = world_to_cam_grid(X_world, w2c_src)
+    X_src_cam = world_to_cam_grid(X_world, w2c_src)       # [B,3,H,W]
 
-    uv_src = project_points_grid(X_src_cam, K_src)
-    grid = uv_to_grid(uv_src, H, W)
+    uv_src = project_points_grid(X_src_cam, K_src)        # [B,H,W,2]
+    grid = uv_to_grid(uv_src, H, W)                       # [B,H,W,2]
 
     warped = F.grid_sample(
         src_feat,
         grid,
         mode="bilinear",
         padding_mode="zeros",
-        align_corners=True
+        align_corners=True,
     )
 
-    z = X_src_cam[:, 2:3]
+    z = X_src_cam[:, 2:3]                                 # [B,1,H,W]
 
     valid = (
         (grid[..., 0] >= -1.0) &
@@ -150,7 +182,6 @@ def warp_feature_to_ref_plane(
 # =========================================================
 
 class DinoV2DenseEncoder(nn.Module):
-
     def __init__(self, model_name="facebook/dinov2-base", freeze=True):
         super().__init__()
 
@@ -168,43 +199,42 @@ class DinoV2DenseEncoder(nn.Module):
 
         self.register_buffer(
             "mean",
-            torch.tensor([0.485, 0.456, 0.406]).view(1,3,1,1),
+            torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1),
             persistent=False
         )
-
         self.register_buffer(
             "std",
-            torch.tensor([0.229,0.224,0.225]).view(1,3,1,1),
+            torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1),
             persistent=False
         )
 
-
     def forward(self, x):
+        """
+        x: [B,3,H,W]
+        return:
+            feat: [B,C,H//patch,W//patch]
+            cls:  [B,C]
+        """
+        B, _, H, W = x.shape
 
-        B,_,H,W = x.shape
+        x = (x - self.mean) / self.std
+        out = self.backbone(pixel_values=x, output_hidden_states=True)
 
-        x = (x-self.mean)/self.std
+        hs = out.hidden_states[-1]   # [B,1+N,C]
+        cls = hs[:, 0]
+        patch = hs[:, 1:]
 
-        out = self.backbone(pixel_values=x,output_hidden_states=True)
+        B2, N, C = patch.shape
+        gh = H // self.patch_size
+        gw = W // self.patch_size
 
-        hs = out.hidden_states[-1]
-
-        cls = hs[:,0]
-        patch = hs[:,1:]
-
-        B2,N,C = patch.shape
-
-        gh = H//self.patch_size
-        gw = W//self.patch_size
-
-        if gh*gw != N:
+        if gh * gw != N:
             raise ValueError(
                 f"DINO reshape mismatch H={H} W={W} gh={gh} gw={gw} N={N}"
             )
 
-        feat = patch.reshape(B2,gh,gw,C).permute(0,3,1,2).contiguous()
-
-        return feat,cls
+        feat = patch.reshape(B2, gh, gw, C).permute(0, 3, 1, 2).contiguous()
+        return feat, cls
 
 
 # =========================================================
@@ -212,19 +242,22 @@ class DinoV2DenseEncoder(nn.Module):
 # =========================================================
 
 class PlaneSweepCostVolume(nn.Module):
+    """
+    Full-resolution plane sweep over upsampled features.
+    """
 
-    def __init__(self,num_depth_bins=128,depth_min=0.5,depth_max=15.0):
+    def __init__(self, num_depth_bins=128, depth_min=0.5, depth_max=15.0):
         super().__init__()
+        self.num_depth_bins = num_depth_bins
+        self.depth_min = depth_min
+        self.depth_max = depth_max
 
-        self.num_depth_bins=num_depth_bins
-        self.depth_min=depth_min
-        self.depth_max=depth_max
-
-
-    def get_depth_planes(self,B,H,W,device,dtype):
-
-        inv_min = 1.0/self.depth_max
-        inv_max = 1.0/self.depth_min
+    def get_depth_values(self, device, dtype):
+        """
+        Returns inverse-depth sampled depth bins: [D]
+        """
+        inv_min = 1.0 / self.depth_max
+        inv_max = 1.0 / self.depth_min
 
         inv = torch.linspace(
             inv_min,
@@ -234,66 +267,60 @@ class PlaneSweepCostVolume(nn.Module):
             dtype=dtype
         )
 
-        depth = 1.0/inv
-
-        depth = depth.view(1,self.num_depth_bins,1,1).expand(B,self.num_depth_bins,H,W)
-
+        depth = 1.0 / inv   # [D]
         return depth
 
+    def forward(self, ref_feat, src_feats, K_ref, c2w_ref, K_srcs, c2w_srcs):
+        """
+        ref_feat:  [B,C,H,W]
+        src_feats: [B,Vs,C,H,W]
+        K_ref:     [B,3,3]
+        c2w_ref:   [B,4,4]
+        K_srcs:    [B,Vs,3,3]
+        c2w_srcs:  [B,Vs,4,4]
 
-    def forward(self,ref_feat,src_feats,K_ref,c2w_ref,K_srcs,c2w_srcs):
-
-        B,C,H,W = ref_feat.shape
+        returns:
+            cost_volume:  [B,D,H,W]
+            depth_values: [D]
+        """
+        B, C, H, W = ref_feat.shape
         Vs = src_feats.shape[1]
 
-        device=ref_feat.device
-        dtype=ref_feat.dtype
+        device = ref_feat.device
+        dtype = ref_feat.dtype
 
-        depth_planes = self.get_depth_planes(B,H,W,device,dtype)
+        depth_values = self.get_depth_values(device, dtype)   # [D]
+        ref_feat_n = F.normalize(ref_feat, dim=1)
 
-        ref_feat_n = F.normalize(ref_feat,dim=1)
-
-        cost_slices=[]
+        cost_slices = []
 
         for d in range(self.num_depth_bins):
+            plane_val = depth_values[d]
+            plane = plane_val.view(1, 1, 1, 1).expand(B, 1, H, W)
 
-            plane = depth_planes[:,d:d+1]
-
-            sims=[]
-
+            sims = []
             for s in range(Vs):
-
-                warped_src,valid = warp_feature_to_ref_plane(
-                    src_feat=src_feats[:,s],
+                warped_src, valid = warp_feature_to_ref_plane(
+                    src_feat=src_feats[:, s],
                     depth_plane=plane,
                     K_ref=K_ref,
                     c2w_ref=c2w_ref,
-                    K_src=K_srcs[:,s],
-                    c2w_src=c2w_srcs[:,s]
+                    K_src=K_srcs[:, s],
+                    c2w_src=c2w_srcs[:, s],
                 )
 
-                warped_src_n = F.normalize(warped_src,dim=1)
-
-                sim = (ref_feat_n*warped_src_n).sum(dim=1,keepdim=True)
-
-                sim = sim*valid
-
+                warped_src_n = F.normalize(warped_src, dim=1)
+                sim = (ref_feat_n * warped_src_n).sum(dim=1, keepdim=True)
+                sim = sim * valid
                 sims.append(sim)
 
-            sim_stack=torch.stack(sims,dim=1)
-
-            sim_mean = sim_stack.mean(dim=1)
-
+            sim_stack = torch.stack(sims, dim=1)   # [B,Vs,1,H,W]
+            sim_mean = sim_stack.mean(dim=1)       # [B,1,H,W]
             cost_slices.append(sim_mean)
 
-        cost_volume = torch.cat(cost_slices,dim=1)
+        cost_volume = torch.cat(cost_slices, dim=1)  # [B,D,H,W]
+        return cost_volume, depth_values
 
-        return cost_volume,depth_planes
-
-
-# =========================================================
-# Remaining model code unchanged
-# =========================================================
 
 # =========================================================
 # Depth/confidence head
@@ -316,12 +343,13 @@ class DepthConfidenceHead(nn.Module):
     """
     Takes:
       cost volume [B,D,H,W]
-      ref feature  [B,C,H,W]
+      ref feature [B,C,H,W]
+
     Predicts:
       depth     [B,1,H,W]
       conf      [B,1,H,W]
       depth_pdf [B,D,H,W]
-      fused     [B,F,H,W]  # feature for Gaussian head
+      fused     [B,F,H,W]
     """
     def __init__(self, feat_dim, num_depth_bins, hidden=128):
         super().__init__()
@@ -337,25 +365,31 @@ class DepthConfidenceHead(nn.Module):
         )
 
         self.depth_logits = nn.Conv2d(hidden, num_depth_bins, 1)
+
         self.conf_head = nn.Sequential(
             ConvBlock(hidden, hidden),
             nn.Conv2d(hidden, 1, 1)
         )
 
-    def forward(self, ref_feat, cost_volume, depth_planes):
+    def forward(self, ref_feat, cost_volume, depth_values):
+        """
+        depth_values: [D]
+        """
         ref_p = self.ref_proj(ref_feat)
         cost_p = self.cost_proj(cost_volume)
 
         x = torch.cat([ref_p, cost_p], dim=1)
         fused = self.fuser(x)
 
-        logits = self.depth_logits(fused)          # [B,D,H,W]
+        logits = self.depth_logits(fused)               # [B,D,H,W]
         pdf = torch.softmax(logits, dim=1)
 
-        depth = (pdf * depth_planes).sum(dim=1, keepdim=True)   # expectation
-        conf = pdf.max(dim=1, keepdim=True).values              # simple confidence
+        depth_values = depth_values.view(1, -1, 1, 1)   # [1,D,1,1]
+        depth = (pdf * depth_values).sum(dim=1, keepdim=True)
 
-        conf = torch.sigmoid(4.0 * (conf - 0.5))                # sharpen a bit
+        conf = pdf.max(dim=1, keepdim=True).values
+        conf = torch.sigmoid(4.0 * (conf - 0.5))
+
         return depth, conf, pdf, fused
 
 
@@ -368,8 +402,10 @@ def aggregate_src_features_at_depth(
 ):
     """
     Warp each src feature into ref view at predicted depth and average.
+
     src_feats: [B,Vs,C,H,W]
     depth:     [B,1,H,W]
+
     returns:
         agg_feat [B,C,H,W]
         valid    [B,1,H,W]
@@ -396,6 +432,7 @@ def aggregate_src_features_at_depth(
     denom = valid_all.sum(dim=1).clamp(min=1.0)
     agg = (warped_all * valid_all).sum(dim=1) / denom
     valid = (valid_all.sum(dim=1) > 0).float()
+
     return agg, valid
 
 
@@ -436,8 +473,7 @@ class GaussianHead(nn.Module):
         opacity_raw = torch.sigmoid(a_raw)
         color = torch.sigmoid(c_raw)
 
-        # ---- tiny innovation: confidence-aware Gaussian shaping ----
-        # high conf -> tighter + more opaque
+        # confidence-aware shaping
         scales = base_scales * (1.25 - 0.75 * conf)
         opacity = opacity_raw * (0.25 + 0.75 * conf)
 
@@ -452,13 +488,16 @@ class MultiViewDinoDepthToGaussians(nn.Module):
     """
     Inputs:
       imgs   [B,V,3,H_img,W_img]
-      Ks     [B,V,3,3]    in pixel coordinates for original image
+      Ks     [B,V,3,3]    in original image pixel coordinates
       c2ws   [B,V,4,4]
       ref_idx: int
       emit_stride: downsample pixels when emitting gaussians
 
-    Returns:
-      dict with depth/conf + per-pixel Gaussian params
+    Full-resolution cost-volume version:
+      - DINO extracts low-res features
+      - reduced features are upsampled to full image resolution
+      - cost volume is constructed at full image resolution
+      - depth is predicted at full image resolution
     """
     def __init__(
         self,
@@ -468,13 +507,16 @@ class MultiViewDinoDepthToGaussians(nn.Module):
         depth_min=0.5,
         depth_max=15.0,
         feat_reduce_dim=128,
+        use_full_res_cost_volume=True,
     ):
         super().__init__()
 
         self.encoder = DinoV2DenseEncoder(dino_name, freeze=freeze_dino)
         C = self.encoder.hidden_dim
+        self.use_full_res_cost_volume = use_full_res_cost_volume
 
         self.feat_reduce = nn.Conv2d(C, feat_reduce_dim, 1)
+
         self.cost_volume = PlaneSweepCostVolume(
             num_depth_bins=num_depth_bins,
             depth_min=depth_min,
@@ -484,53 +526,80 @@ class MultiViewDinoDepthToGaussians(nn.Module):
         self.depth_head = DepthConfidenceHead(
             feat_dim=feat_reduce_dim,
             num_depth_bins=num_depth_bins,
-            hidden=128
+            hidden=128,
         )
-        
+
         self.gaussian_head = GaussianHead(
             ref_feat_dim=feat_reduce_dim,
             fused_dim=128,
-            hidden=128
+            hidden=128,
         )
 
     def forward(self, imgs, Ks, c2ws, ref_idx=0, emit_stride=2):
         B, V, _, H_img, W_img = imgs.shape
-        device = imgs.device
 
-        # ---------------------------------------
-        # dense features per view
-        # ---------------------------------------
+        # -------------------------------------------------
+        # 1) DINO low-res features per view
+        # -------------------------------------------------
         feats = []
         for v in range(V):
-            f, _ = self.encoder(imgs[:, v])          # [B,C,H,W]
-            f = self.feat_reduce(f)                  # [B,Cr,H,W]
+            f, _ = self.encoder(imgs[:, v])   # [B,C,Hd,Wd]
+            f = self.feat_reduce(f)           # [B,Cr,Hd,Wd]
             feats.append(f)
 
-        feat_stack = torch.stack(feats, dim=1)       # [B,V,Cr,H,W]
-        _, _, Cr, Hf, Wf = feat_stack.shape
+        feat_stack_low = torch.stack(feats, dim=1)   # [B,V,Cr,Hd,Wd]
+        _, _, Cr, Hd, Wd = feat_stack_low.shape
 
-        # intrinsics to feature resolution
-        Ks_f = scale_intrinsics_batch(
-            Ks.view(B * V, 3, 3),
-            src_hw=(H_img, W_img),
-            dst_hw=(Hf, Wf)
-        ).view(B, V, 3, 3)
+        # -------------------------------------------------
+        # 2) Build features used by cost volume
+        # -------------------------------------------------
+        if self.use_full_res_cost_volume:
+            feat_stack = F.interpolate(
+                feat_stack_low.reshape(B * V, Cr, Hd, Wd),
+                size=(H_img, W_img),
+                mode="bilinear",
+                align_corners=False,
+            ).reshape(B, V, Cr, H_img, W_img)
 
-        # split ref/src
-        ref_feat = feat_stack[:, ref_idx]            # [B,Cr,Hf,Wf]
-        ref_img = F.interpolate(imgs[:, ref_idx], size=(Hf, Wf), mode="bilinear", align_corners=False)
-        K_ref = Ks_f[:, ref_idx]
+            Ks_used = Ks
+            Hcv, Wcv = H_img, W_img
+        else:
+            feat_stack = feat_stack_low
+            Ks_used = scale_intrinsics_batch(
+                Ks.reshape(B * V, 3, 3),
+                src_hw=(H_img, W_img),
+                dst_hw=(Hd, Wd),
+            ).reshape(B, V, 3, 3)
+
+            Hcv, Wcv = Hd, Wd
+
+        # -------------------------------------------------
+        # 3) Split ref/src
+        # -------------------------------------------------
+        ref_feat = feat_stack[:, ref_idx]                  # [B,Cr,Hcv,Wcv]
+
+        if Hcv == H_img and Wcv == W_img:
+            ref_img = imgs[:, ref_idx]
+        else:
+            ref_img = F.interpolate(
+                imgs[:, ref_idx],
+                size=(Hcv, Wcv),
+                mode="bilinear",
+                align_corners=False,
+            )
+
+        K_ref = Ks_used[:, ref_idx]
         c2w_ref = c2ws[:, ref_idx]
 
         src_indices = [i for i in range(V) if i != ref_idx]
-        src_feats = feat_stack[:, src_indices]       # [B,Vs,Cr,Hf,Wf]
-        K_srcs = Ks_f[:, src_indices]
+        src_feats = feat_stack[:, src_indices]             # [B,Vs,Cr,Hcv,Wcv]
+        K_srcs = Ks_used[:, src_indices]
         c2w_srcs = c2ws[:, src_indices]
 
-        # ---------------------------------------
-        # depth via cost volume
-        # ---------------------------------------
-        cost_vol, depth_planes = self.cost_volume(
+        # -------------------------------------------------
+        # 4) Full-resolution cost volume + depth
+        # -------------------------------------------------
+        cost_vol, depth_values = self.cost_volume(
             ref_feat=ref_feat,
             src_feats=src_feats,
             K_ref=K_ref,
@@ -542,49 +611,53 @@ class MultiViewDinoDepthToGaussians(nn.Module):
         depth, conf, depth_pdf, fused_feat = self.depth_head(
             ref_feat=ref_feat,
             cost_volume=cost_vol,
-            depth_planes=depth_planes,
+            depth_values=depth_values,
         )
 
-        # ---------------------------------------
-        # aggregate source features at estimated depth
-        # ---------------------------------------
+        # keep full-res confidence for return
+        conf_full = conf
+        depth_full = depth
+
+        # -------------------------------------------------
+        # 5) Aggregate source features at predicted depth
+        # -------------------------------------------------
         src_agg_feat, valid = aggregate_src_features_at_depth(
             src_feats=src_feats,
-            depth=depth,
+            depth=depth_full,
             K_ref=K_ref,
             c2w_ref=c2w_ref,
             K_srcs=K_srcs,
             c2w_srcs=c2w_srcs,
         )
 
-        # ---------------------------------------
-        # gaussian params per pixel
-        # ---------------------------------------
-        d_xyz, scales, quat, opacity, color = self.gaussian_head(
+        # -------------------------------------------------
+        # 6) Gaussian params per pixel
+        # -------------------------------------------------
+        d_xyz, scales_full, quat_full, opacity_full, color_full = self.gaussian_head(
             ref_feat=ref_feat,
             src_agg_feat=src_agg_feat,
             fused_feat=fused_feat,
-            depth=depth,
-            conf=conf,
+            depth=depth_full,
+            conf=conf_full,
             rgb=ref_img,
         )
 
-        # ---------------------------------------
-        # unproject to 3D in ref camera and convert to world
-        # ---------------------------------------
-        X_ref_cam = unproject_depth(depth, K_ref)   # [B,3,Hf,Wf]
+        # -------------------------------------------------
+        # 7) Unproject full-res depth to world coordinates
+        # -------------------------------------------------
+        X_ref_cam = unproject_depth(depth_full, K_ref)   # [B,3,Hcv,Wcv]
         X_ref_cam = X_ref_cam + d_xyz
-        X_world = cam_to_world_grid(X_ref_cam, c2w_ref)   # [B,3,Hf,Wf]
+        X_world_full = cam_to_world_grid(X_ref_cam, c2w_ref)
 
-        # ---------------------------------------
-        # emit gaussians on strided grid
-        # ---------------------------------------
-        X_world = X_world[:, :, ::emit_stride, ::emit_stride]
-        scales = scales[:, :, ::emit_stride, ::emit_stride]
-        quat = quat[:, :, ::emit_stride, ::emit_stride]
-        opacity = opacity[:, :, ::emit_stride, ::emit_stride]
-        color = color[:, :, ::emit_stride, ::emit_stride]
-        conf = conf[:, :, ::emit_stride, ::emit_stride]
+        # -------------------------------------------------
+        # 8) Emit gaussians on strided full-res grid
+        # -------------------------------------------------
+        X_world = X_world_full[:, :, ::emit_stride, ::emit_stride]
+        scales = scales_full[:, :, ::emit_stride, ::emit_stride]
+        quat = quat_full[:, :, ::emit_stride, ::emit_stride]
+        opacity = opacity_full[:, :, ::emit_stride, ::emit_stride]
+        color = color_full[:, :, ::emit_stride, ::emit_stride]
+        conf_emit = conf_full[:, :, ::emit_stride, ::emit_stride]
 
         B2, _, Hg, Wg = X_world.shape
         M = Hg * Wg
@@ -594,20 +667,22 @@ class MultiViewDinoDepthToGaussians(nn.Module):
         rotations = quat.reshape(B2, 4, M).permute(0, 2, 1).contiguous()
         opacities = opacity.reshape(B2, 1, M).permute(0, 2, 1).contiguous()
         colors = color.reshape(B2, 3, M).permute(0, 2, 1).contiguous()
-        conf_flat = conf.reshape(B2, 1, M).permute(0, 2, 1).contiguous()
+        conf_flat = conf_emit.reshape(B2, 1, M).permute(0, 2, 1).contiguous()
 
         return {
-            "depth": depth,                 # [B,1,Hf,Wf]
-            "confidence": conf,             # [B,1,Hf,Wf] before flattening stride
-            "depth_pdf": depth_pdf,         # [B,D,Hf,Wf]
-            "means3D": means3D,             # [B,M,3]
-            "scales": scales,               # [B,M,3]
-            "rotations": rotations,         # [B,M,4]
-            "opacities": opacities,         # [B,M,1]
-            "colors": colors,               # [B,M,3]
-            "gaussian_conf": conf_flat,     # [B,M,1]
-            "feat_h": Hf,
-            "feat_w": Wf,
+            "depth": depth_full,             # [B,1,H_img,W_img] if full-res mode
+            "confidence": conf_full,         # [B,1,H_img,W_img]
+            "depth_pdf": depth_pdf,          # [B,D,H_img,W_img] if full-res mode
+            "means3D": means3D,              # [B,M,3]
+            "scales": scales,                # [B,M,3]
+            "rotations": rotations,          # [B,M,4]
+            "opacities": opacities,          # [B,M,1]
+            "colors": colors,                # [B,M,3]
+            "gaussian_conf": conf_flat,      # [B,M,1]
+            "feat_h": Hcv,
+            "feat_w": Wcv,
+            "dino_h": Hd,
+            "dino_w": Wd,
             "emit_stride": emit_stride,
             "ref_idx": ref_idx,
         }

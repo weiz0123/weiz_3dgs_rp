@@ -7,13 +7,20 @@ import torchvision.utils as vutils
 import traceback
 from PIL import Image
 from pipeline.data_loader import RealEstate10KDataset
-from gs_models.multiview_dino_depth_gs import (
+from gs_models.mvv2 import (
     MultiViewDinoDepthToGaussians,
 )
 from gs_models.losses import total_loss
 from gs_models.render_utils import rasterize_gaussians_single
 from train_re10k_utils import scene_to_model_inputs
 from train_re10k_utils import save_visuals
+import cv2
+cv2.setNumThreads(0)
+
+import torch
+torch.set_num_threads(1)
+torch.set_num_interop_threads(1)
+
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
@@ -153,7 +160,7 @@ def train_re10k(
         batch_size=1,
         shuffle=True,
         num_workers=2,
-        pin_memory=True,
+        pin_memory=False,
         collate_fn=scene_collate,
     )
 
@@ -161,7 +168,7 @@ def train_re10k(
     model = MultiViewDinoDepthToGaussians(
         dino_name="facebook/dinov2-base",
         freeze_dino=True,
-        num_depth_bins=96,
+        num_depth_bins=48,
         depth_min=0.5,
         depth_max=20.0,
         feat_reduce_dim=128,
@@ -274,6 +281,6 @@ if __name__ == "__main__":
         emit_stride=1,
         max_scenes_per_epoch=200,
         save_dir="outputs/re10k_debug",
-        run_id=0,
+        run_id=2,
         resume=True,
     )
