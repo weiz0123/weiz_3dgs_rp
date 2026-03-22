@@ -235,8 +235,9 @@ def run(
 # ENTRY
 # -------------------------------------------------
 if __name__ == "__main__":
+    print("asdf")
     run(
-        ckpt_path=r"C:\Users\zhouw\Desktop\3DGS\weiz_3dgs_rp\outputs\model_epoch_226.pth",
+        ckpt_path=r"/home/weiz/links/scratch/weiz_3dgs_rp/outputs/re10k_debug/run_2/model_epoch_226.pth",
         data_root="datasets/realestate10k_subset",
         save_dir="outputs/multi_trial_video",
         n_input=4,

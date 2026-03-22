@@ -5,7 +5,9 @@ import cv2
 import numpy as np
 import random
 
-
+'''
+Dataset Loader
+'''
 class RealEstate10KDataset(Dataset):
 
     def __init__(self, root, transform=None):
