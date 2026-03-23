@@ -1,3 +1,7 @@
+'''
+this will scan through raw RE10K dataset and extract a subset video/scene id into a subsets.txt
+'''
+
 from pathlib import Path
 import random
 
