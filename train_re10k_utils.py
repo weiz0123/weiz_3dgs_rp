@@ -9,7 +9,9 @@ from tqdm import tqdm
 import torchvision.utils as vutils
 from PIL import Image
 from pipeline.data_loader import RealEstate10KDataset
-
+'''
+used to manipulate loaded data into training model
+'''
 
 def intrinsics_to_pixel(K: torch.Tensor, H: int, W: int):
     '''

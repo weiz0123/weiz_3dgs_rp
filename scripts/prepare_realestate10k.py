@@ -2,7 +2,21 @@ import subprocess
 from pathlib import Path
 import cv2
 import shutil
+'''
+.
+└── realestate10k_subset
+    ├── RealEstate10K <--- raw data
+    ├── scenes
+    ├── subset_train.txt
+    └── videos
+This script will scan through subset_train.txt and make 2 dir <scenes> and <videos> 
 
+scenes
+└── fffb42151ab2e284
+    ├── frames
+    └── metadata.txt
+    ...
+'''
 # -------------------------------------------------------
 # PATHS
 # -------------------------------------------------------
