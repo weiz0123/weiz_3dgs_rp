@@ -53,6 +53,46 @@ class TransformerBlock(nn.Module):
         return x
 
 
+class GlobalFrameBlock(nn.Module):
+    """
+    One VGGT-style layer:
+      1) global attention across frames at each spatial token
+      2) frame attention across spatial tokens within each frame
+    """
+
+    def __init__(self, dim, num_heads, mlp_ratio=4.0, dropout=0.0):
+        super().__init__()
+        self.global_block = TransformerBlock(
+            dim=dim,
+            num_heads=num_heads,
+            mlp_ratio=mlp_ratio,
+            dropout=dropout,
+        )
+        self.frame_block = TransformerBlock(
+            dim=dim,
+            num_heads=num_heads,
+            mlp_ratio=mlp_ratio,
+            dropout=dropout,
+        )
+
+    def forward(self, x):
+        """
+        x: [B, V, HW, C]
+        """
+        b, v, hw, c = x.shape
+
+        # Cross-view mixing at fixed spatial positions.
+        x_global = x.permute(0, 2, 1, 3).reshape(b * hw, v, c)
+        x_global = self.global_block(x_global)
+        x = x_global.reshape(b, hw, v, c).permute(0, 2, 1, 3).contiguous()
+
+        # Within-frame spatial mixing for each view independently.
+        x_frame = x.reshape(b * v, hw, c)
+        x_frame = self.frame_block(x_frame)
+        x = x_frame.reshape(b, v, hw, c)
+        return x
+
+
 class ResidualConvUnit(nn.Module):
     def __init__(self, dim):
         super().__init__()
@@ -161,7 +201,7 @@ class MiniVGGTDepthModule(nn.Module):
         self.view_embed = nn.Embedding(max_views, feat_dim)
         self.blocks = nn.ModuleList(
             [
-                TransformerBlock(
+                GlobalFrameBlock(
                     dim=feat_dim,
                     num_heads=transformer_heads,
                     mlp_ratio=mlp_ratio,
@@ -200,10 +240,12 @@ class MiniVGGTDepthModule(nn.Module):
             feat_stack_low.dtype
         )
 
-        x = (tokens + pos + view_pos).reshape(b, v * h * w, self.feat_dim)
+        x = tokens + pos + view_pos
         for block in self.blocks:
             x = block(x)
-        x = self.norm(x)
+        x = self.norm(x.reshape(b, v * h * w, self.feat_dim)).reshape(
+            b, v, h * w, self.feat_dim
+        )
 
         fused_low = x.reshape(b, v, h, w, self.feat_dim).permute(0, 1, 4, 2, 3).contiguous()
         fused_full = F.interpolate(

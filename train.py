@@ -1,11 +1,16 @@
+import csv
+import importlib
+import inspect
+import json
 import os
+from dataclasses import asdict
 from tqdm import tqdm
 import traceback
 
 from PIL import Image
 from pipeline.data_loader import RealEstate10KDataset
 
-from gs_models.mvv3 import (MultiViewDinoDepthToGaussians,)
+from configs.re10k_experiment import ExperimentConfig, get_default_config
 from gs_models.losses import total_loss
 from gs_models.render_utils import rasterize_gaussians_single
 
@@ -19,7 +24,6 @@ cv2.setNumThreads(0)
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-import torchvision.utils as vutils
 torch.set_num_threads(1)
 torch.set_num_interop_threads(1)
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -28,7 +32,50 @@ torch.backends.cudnn.allow_tf32 = True
 def scene_collate(batch):
     return batch
 
-def train_one_step(model, optimizer, scene_batch, device="cuda", n_input=3, emit_stride=1):
+
+def resolve_device(device_name: str) -> str:
+    if device_name == "auto":
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    return device_name
+
+
+def load_model_class(model_version: str):
+    module = importlib.import_module(f"gs_models.{model_version}")
+    return module.MultiViewDinoDepthToGaussians
+
+
+def build_model(config: ExperimentConfig, device: str):
+    model_cls = load_model_class(config.model.model_version)
+    model_kwargs = {
+        "dino_name": config.model.dino_name,
+        "freeze_dino": config.model.freeze_dino,
+        "num_depth_bins": config.model.num_depth_bins,
+        "depth_min": config.model.depth_min,
+        "depth_max": config.model.depth_max,
+        "feat_reduce_dim": config.model.feat_reduce_dim,
+        "use_full_res_cost_volume": config.model.use_full_res_cost_volume,
+        "transformer_depth": config.model.transformer_depth,
+        "transformer_heads": config.model.transformer_heads,
+        "max_views": config.model.max_views,
+    }
+
+    valid_params = inspect.signature(model_cls.__init__).parameters
+    filtered_kwargs = {k: v for k, v in model_kwargs.items() if k in valid_params}
+    return model_cls(**filtered_kwargs).to(device)
+
+
+def train_one_step(
+    model,
+    optimizer,
+    scene_batch,
+    device="cuda",
+    n_input=3,
+    min_input_views=None,
+    input_view_sampling="nearest",
+    emit_stride=1,
+    target_mode="middle",
+    exclude_target=True,
+):
     model.train()
     optimizer.zero_grad(set_to_none=True)
 
@@ -50,7 +97,15 @@ def train_one_step(model, optimizer, scene_batch, device="cuda", n_input=3, emit
             target_K,
             target_pose,
             meta,
-        ) = scene_to_model_inputs(scene, device=device, n_input=n_input)
+        ) = scene_to_model_inputs(
+            scene,
+            device=device,
+            target_mode=target_mode,
+            exclude_target=exclude_target,
+            n_input=n_input,
+            min_input_views=min_input_views,
+            input_view_sampling=input_view_sampling,
+        )
 
         batch_inputs.append(input_imgs)
         batch_Ks.append(input_Ks)
@@ -137,46 +192,33 @@ def train_one_step(model, optimizer, scene_batch, device="cuda", n_input=3, emit
 
     return stats, metas[0], rendered.detach(), target_img.detach(), depth.detach(), input_imgs.detach()
 
-def train_re10k(
-    data_root="datasets/realestate10k_subset",
-    epochs=5,
-    device="cuda",
-    lr=1e-4,
-    n_input=3,
-    emit_stride=1,
-    max_scenes_per_epoch=None,
-    save_dir="outputs/re10k_debug",
-    run_id=0,
-    resume=True,
-    resume_mode="latest",          # "latest" or "best"
-    metric_every=1,                # compute epoch PSNR every N epochs
-    save_best_by="loss",           # "loss" or "psnr"
-):
-    save_dir = os.path.join(save_dir, f"run_{run_id}")
+def train_re10k(config: ExperimentConfig):
+    if config.data.num_target_views != 1:
+        raise ValueError("Current training pipeline supports exactly 1 target view")
+
+    device = resolve_device(config.training.device)
+    save_dir = os.path.join(config.training.save_dir, f"run_{config.training.run_id}")
     os.makedirs(save_dir, exist_ok=True)
 
-    dataset = RealEstate10KDataset(data_root)
+    config_path = os.path.join(save_dir, "config.json")
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(asdict(config), f, indent=2)
+
+    dataset = RealEstate10KDataset(config.data.data_root)
     print("loading datasets...\n")
     # scene {frames:ins:pos}
   
     loader = DataLoader(
         dataset,
-        batch_size=1,
-        shuffle=True,
-        num_workers=2,
-        pin_memory=False,
+        batch_size=config.data.batch_size,
+        shuffle=config.data.shuffle,
+        num_workers=config.data.num_workers,
+        pin_memory=config.data.pin_memory,
         collate_fn=scene_collate,
     )
 
     print("loading model...\n")
-    model = MultiViewDinoDepthToGaussians(
-        dino_name="facebook/dinov2-base",
-        freeze_dino=True,
-        num_depth_bins=48,
-        depth_min=0.5,
-        depth_max=20.0,
-        feat_reduce_dim=128,
-    ).to(device)
+    model = build_model(config, device)
 
     print("init training...\n")
 
@@ -185,8 +227,8 @@ def train_re10k(
 ##############################
     optimizer = torch.optim.AdamW(
         [p for p in model.parameters() if p.requires_grad], # keep track of parameter that needs to be tuned
-        lr=lr,
-        weight_decay=1e-4,
+        lr=config.training.learning_rate,
+        weight_decay=config.training.weight_decay,
     )
 
     start_epoch = 0
@@ -199,12 +241,12 @@ def train_re10k(
 ##############################
 # Pre Load
 ##############################
-    if resume:
+    if config.training.resume:
         chosen_ckpt = None
 
-        if resume_mode == "best" and os.path.exists(best_ckpt_path):
+        if config.training.resume_mode == "best" and os.path.exists(best_ckpt_path):
             chosen_ckpt = best_ckpt_path
-        elif resume_mode == "latest" and os.path.exists(latest_ckpt_path):
+        elif config.training.resume_mode == "latest" and os.path.exists(latest_ckpt_path):
             chosen_ckpt = latest_ckpt_path
         else:
             ckpts = [f for f in os.listdir(save_dir) if f.startswith("model_epoch_") and f.endswith(".pth")]
@@ -240,7 +282,7 @@ def train_re10k(
 ##############################
 # Training Loop
 ##############################
-    for ep in range(start_epoch, epochs):
+    for ep in range(start_epoch, config.training.epochs):
         total_loss_val = 0.0
         total_l1_val = 0.0
         total_ssim_val = 0.0
@@ -249,10 +291,13 @@ def train_re10k(
         psnr_count = 0
         steps = 0
 
-        do_metric = ((ep + 1) % metric_every == 0)
+        do_metric = ((ep + 1) % config.training.metric_every == 0)
 
         for i, scene_batch in enumerate(tqdm(loader, desc=f"Epoch {ep+1}")):
-            if max_scenes_per_epoch is not None and i >= max_scenes_per_epoch:
+            if (
+                config.training.max_scenes_per_epoch is not None
+                and i >= config.training.max_scenes_per_epoch
+            ):
                 break
             ##############################
             # 
@@ -263,8 +308,12 @@ def train_re10k(
                     optimizer=optimizer,
                     scene_batch=scene_batch,
                     device=device,
-                    n_input=n_input, # number of input view
-                    emit_stride=emit_stride,  # one guassian / emit_stride pixels
+                    n_input=config.data.n_input_views,
+                    min_input_views=config.data.min_input_views,
+                    input_view_sampling=config.data.input_view_sampling,
+                    emit_stride=config.training.emit_stride,
+                    target_mode=config.data.target_mode,
+                    exclude_target=config.data.exclude_target,
                 )
 
             ##############################
@@ -288,7 +337,7 @@ def train_re10k(
                 else:
                     psnr_val = None
                 
-                if i % 10 == 0:
+                if i % config.training.log_every_n_steps == 0:
                     msg = (
                         f"[Epoch {ep+1} | Scene {i}] "
                         f"{meta['scene_name']} | "
@@ -306,7 +355,10 @@ def train_re10k(
             #  save inference
             ##############################
                 # save visual result
-                if ep % 2 == 0 and i % 20 == 0:
+                if (
+                    ep % config.training.visualize_every_n_epochs == 0
+                    and i % config.training.visualize_every_n_steps == 0
+                ):
                     save_visuals(
                         save_dir=os.path.join(save_dir, "visuals"),
                         epoch=ep,
@@ -351,10 +403,10 @@ def train_re10k(
 
         saved_as_best = False
 
-        if save_best_by == "loss":
+        if config.training.save_best_by == "loss":
             current_metric = avg
             is_better = (best_metric is None) or (current_metric < best_metric)
-        elif save_best_by == "psnr":
+        elif config.training.save_best_by == "psnr":
             current_metric = avg_psnr
             is_better = (current_metric is not None) and ((best_metric is None) or (current_metric > best_metric))
         else:
@@ -375,7 +427,10 @@ def train_re10k(
             }
             torch.save(best_payload, best_ckpt_path)
             saved_as_best = True
-            print(f"New best model saved at epoch {ep+1} | {save_best_by}={best_metric}")
+            print(
+                f"New best model saved at epoch {ep+1} | "
+                f"{config.training.save_best_by}={best_metric}"
+            )
 
         with open(csv_log_path, "a", newline="") as f:
             writer = csv.writer(f)
@@ -394,21 +449,7 @@ def train_re10k(
     return model
 
 if __name__ == "__main__":
-    device = "cuda" if torch.cuda.is_available() else "cpu"
     print("start...\n")
-
-    train_re10k(
-        data_root="datasets/realestate10k_subset",
-        epochs=400,
-        device=device,
-        lr=1e-4,
-        n_input=4,
-        emit_stride=1,
-        max_scenes_per_epoch=200,
-        save_dir="outputs/re10k_debug",
-        run_id=2,
-        resume=True,
-        resume_mode="latest",   # best
-        metric_every=1,
-        save_best_by="loss",    # psnr
-    )
+    config = get_default_config()
+    print(f"training model version: {config.model.model_version}")
+    train_re10k(config)

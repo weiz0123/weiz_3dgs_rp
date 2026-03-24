@@ -33,12 +33,131 @@ def intrinsics_to_pixel(K: torch.Tensor, H: int, W: int):
     return Kp
 
 
+def _evenly_sample_ids(ids, num_samples):
+    if num_samples <= 0 or len(ids) == 0:
+        return []
+    if len(ids) <= num_samples:
+        return list(ids)
+
+    positions = torch.linspace(0, len(ids) - 1, steps=num_samples)
+    selected = []
+    used = set()
+
+    for pos in positions.tolist():
+        idx = int(round(pos))
+        idx = max(0, min(idx, len(ids) - 1))
+
+        if idx in used:
+            for offset in range(1, len(ids)):
+                left = idx - offset
+                right = idx + offset
+                if left >= 0 and left not in used:
+                    idx = left
+                    break
+                if right < len(ids) and right not in used:
+                    idx = right
+                    break
+
+        used.add(idx)
+        selected.append(ids[idx])
+
+    return selected
+
+
+def _camera_centers_from_poses(poses):
+    return poses[:, :3, 3]
+
+
+def _select_pose_sparse_ids(candidate_ids, poses, target_id, n_input):
+    if len(candidate_ids) < n_input:
+        raise ValueError(
+            f"Need at least {n_input} candidate input views, got {len(candidate_ids)}"
+        )
+
+    centers = _camera_centers_from_poses(poses)
+    target_center = centers[target_id]
+    candidate_centers = centers[candidate_ids]
+
+    target_dist = torch.norm(candidate_centers - target_center.unsqueeze(0), dim=1)
+    seed_order = torch.argsort(target_dist, descending=True)
+
+    selected_local = [int(seed_order[0].item())]
+    remaining = set(range(len(candidate_ids))) - set(selected_local)
+
+    while len(selected_local) < n_input and remaining:
+        best_idx = None
+        best_score = None
+
+        for idx in remaining:
+            center = candidate_centers[idx]
+            dist_to_target = torch.norm(center - target_center, p=2).item()
+            diversity = min(
+                torch.norm(center - candidate_centers[j], p=2).item()
+                for j in selected_local
+            )
+            score = 0.5 * dist_to_target + 0.5 * diversity
+
+            if best_score is None or score > best_score:
+                best_score = score
+                best_idx = idx
+
+        selected_local.append(best_idx)
+        remaining.remove(best_idx)
+
+    selected_ids = [candidate_ids[idx] for idx in selected_local]
+    return sorted(selected_ids)
+
+
+def _select_input_ids(candidate_ids, target_id, n_input, sampling, poses=None):
+    if len(candidate_ids) < n_input:
+        raise ValueError(
+            f"Need at least {n_input} candidate input views, got {len(candidate_ids)}"
+        )
+
+    if sampling == "nearest":
+        ordered = sorted(candidate_ids, key=lambda i: abs(i - target_id))
+        return ordered[:n_input]
+
+    if sampling == "sparse":
+        before = [i for i in candidate_ids if i < target_id]
+        after = [i for i in candidate_ids if i > target_id]
+
+        left_quota = n_input // 2
+        right_quota = n_input - left_quota
+
+        left_ids = _evenly_sample_ids(before, min(left_quota, len(before)))
+        right_ids = _evenly_sample_ids(after, min(right_quota, len(after)))
+
+        remaining = n_input - len(left_ids) - len(right_ids)
+        if remaining > 0:
+            leftovers = [i for i in candidate_ids if i not in set(left_ids + right_ids)]
+            extra = _evenly_sample_ids(leftovers, remaining)
+        else:
+            extra = []
+
+        return sorted(left_ids + right_ids + extra)
+
+    if sampling == "pose_sparse":
+        if poses is None:
+            raise ValueError("poses are required for pose_sparse input sampling")
+        return _select_pose_sparse_ids(
+            candidate_ids=candidate_ids,
+            poses=poses,
+            target_id=target_id,
+            n_input=n_input,
+        )
+
+    raise ValueError(f"Unknown input sampling mode: {sampling}")
+
+
 def scene_to_model_inputs(
     scene,
     device="cuda",
     target_mode="middle",
     exclude_target=True,
     n_input=3,
+    min_input_views=None,
+    input_view_sampling="nearest",
 ):
 
     # -------------------------------------------------
@@ -77,8 +196,18 @@ def scene_to_model_inputs(
             else:
                 candidate_ids = list(range(T))
 
-            candidate_ids = sorted(candidate_ids, key=lambda i: abs(i - target_id))
-            input_ids = candidate_ids[: min(n_input, len(candidate_ids))]
+            required_inputs = n_input if min_input_views is None else max(n_input, min_input_views)
+            if len(candidate_ids) < required_inputs:
+                raise ValueError(
+                    f"Skipping scene {s['scene']}: need at least {required_inputs} candidate views, got {len(candidate_ids)}"
+                )
+            input_ids = _select_input_ids(
+                candidate_ids=candidate_ids,
+                target_id=target_id,
+                n_input=n_input,
+                sampling=input_view_sampling,
+                poses=poses,
+            )
 
             imgs.append(images[input_ids])
             Ks_out.append(Ks[input_ids])
@@ -130,12 +259,19 @@ def scene_to_model_inputs(
     else:
         candidate_ids = list(range(T))
 
-    candidate_ids = sorted(candidate_ids, key=lambda i: abs(i - target_id))
-    if len(candidate_ids) >= n_input:
-        input_ids = candidate_ids[:n_input]
-    else:
-        # repeat frames if scene is too short
-        input_ids = candidate_ids + [candidate_ids[-1]] * (n_input - len(candidate_ids))
+    required_inputs = n_input if min_input_views is None else max(n_input, min_input_views)
+    if len(candidate_ids) < required_inputs:
+        raise ValueError(
+            f"Skipping scene {scene['scene']}: need at least {required_inputs} candidate views, got {len(candidate_ids)}"
+        )
+
+    input_ids = _select_input_ids(
+        candidate_ids=candidate_ids,
+        target_id=target_id,
+        n_input=n_input,
+        sampling=input_view_sampling,
+        poses=poses,
+    )
 
     input_imgs = images[input_ids].unsqueeze(0).to(device)
     input_Ks = Ks[input_ids].unsqueeze(0).to(device)
