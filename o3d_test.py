@@ -6,7 +6,7 @@ import numpy as np
 import open3d as o3d
 
 from pipeline.data_loader import RealEstate10KDataset
-from gs_models.mvv2 import MultiViewDinoDepthToGaussians
+from gs_models.mvv3 import MultiViewDinoDepthToGaussians
 from gs_models.render_utils import rasterize_gaussians_single
 
 print("🚀 Dataset-pose VIDEO inference started", flush=True)

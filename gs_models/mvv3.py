@@ -1,6 +1,5 @@
-from .mvv2_cost_volume import PlaneSweepCostVolume
-from .mvv2_encoder import DinoV2DenseEncoder
-from .mvv2_geometry import (
+from .mvv3_encoder import DinoV2DenseEncoder
+from .mvv3_geometry import (
     cam_to_world_grid,
     invert_pose,
     make_pixel_grid,
@@ -11,22 +10,20 @@ from .mvv2_geometry import (
     warp_feature_to_ref_plane,
     world_to_cam_grid,
 )
-from .mvv2_heads import (
+from .mvv3_heads import (
     ConvBlock,
-    DepthConfidenceHead,
     GaussianHead,
-    aggregate_src_features_at_depth,
 )
-from .mvv2_model import MultiViewDinoDepthToGaussians
+from .mvv3_mini_vggt import DPTDepthHead, MiniVGGTDepthModule
+from .mvv3_model import MultiViewDinoDepthToGaussians
 
 __all__ = [
     "ConvBlock",
-    "DepthConfidenceHead",
+    "DPTDepthHead",
     "DinoV2DenseEncoder",
     "GaussianHead",
+    "MiniVGGTDepthModule",
     "MultiViewDinoDepthToGaussians",
-    "PlaneSweepCostVolume",
-    "aggregate_src_features_at_depth",
     "cam_to_world_grid",
     "invert_pose",
     "make_pixel_grid",

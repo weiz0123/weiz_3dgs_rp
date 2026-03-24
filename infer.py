@@ -4,7 +4,7 @@ import torch
 import torchvision.utils as vutils
 
 from pipeline.data_loader import RealEstate10KDataset
-from gs_models.mvv2 import MultiViewDinoDepthToGaussians
+from gs_models.mvv3 import MultiViewDinoDepthToGaussians
 from gs_models.render_utils import rasterize_gaussians_single
 
 print("🚀 inference script started")
