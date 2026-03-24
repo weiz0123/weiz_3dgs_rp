@@ -16,6 +16,7 @@ from .mvv3_heads import (
 )
 from .mvv3_mini_vggt import DPTDepthHead, MiniVGGTDepthModule
 from .mvv3_model import MultiViewDinoDepthToGaussians
+from .mvv3_vggt_depth import OfficialVGGTDepthModule
 
 __all__ = [
     "ConvBlock",
@@ -24,6 +25,7 @@ __all__ = [
     "GaussianHead",
     "MiniVGGTDepthModule",
     "MultiViewDinoDepthToGaussians",
+    "OfficialVGGTDepthModule",
     "cam_to_world_grid",
     "invert_pose",
     "make_pixel_grid",

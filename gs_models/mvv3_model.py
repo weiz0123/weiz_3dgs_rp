@@ -1,15 +1,16 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from .mvv3_encoder import DinoV2DenseEncoder
 from .mvv3_geometry import cam_to_world_grid, unproject_depth
 from .mvv3_heads import GaussianHead
-from .mvv3_mini_vggt import MiniVGGTDepthModule
+from .mvv3_vggt_depth import OfficialVGGTDepthModule
 
 
 class MultiViewDinoDepthToGaussians(nn.Module):
     """
-    MVV3: DINOv2 features + mini-VGGT depth/context module + Gaussian emission head.
+    MVV3: DINOv2 features + official VGGT depth branch + Gaussian emission head.
     """
 
     def __init__(
@@ -24,6 +25,11 @@ class MultiViewDinoDepthToGaussians(nn.Module):
         transformer_depth=4,
         transformer_heads=8,
         max_views=8,
+        vggt_model_name="facebook/VGGT-1B",
+        vggt_repo_path=None,
+        vggt_cache_dir=None,
+        vggt_local_files_only=False,
+        freeze_vggt=True,
     ):
         super().__init__()
 
@@ -31,14 +37,16 @@ class MultiViewDinoDepthToGaussians(nn.Module):
             model_name=dino_name,
             freeze=freeze_dino,
         )
-        self.mini_vggt = MiniVGGTDepthModule(
-            in_dim=self.encoder.hidden_dim,
+        self.feat_reduce = nn.Conv2d(self.encoder.hidden_dim, feat_reduce_dim, 1)
+        self.vggt_depth = OfficialVGGTDepthModule(
             feat_dim=feat_reduce_dim,
             depth_min=depth_min,
             depth_max=depth_max,
-            transformer_depth=transformer_depth,
-            transformer_heads=transformer_heads,
-            max_views=max_views,
+            vggt_model_name=vggt_model_name,
+            vggt_repo_path=vggt_repo_path,
+            vggt_cache_dir=vggt_cache_dir,
+            vggt_local_files_only=vggt_local_files_only,
+            freeze_vggt=freeze_vggt,
         )
         self.gaussian_head = GaussianHead(
             ref_feat_dim=feat_reduce_dim,
@@ -55,23 +63,33 @@ class MultiViewDinoDepthToGaussians(nn.Module):
         dino_feats = []
         for view_idx in range(v):
             feat, _ = self.encoder(imgs[:, view_idx])
-            dino_feats.append(feat)
-        dino_feat_stack = torch.stack(dino_feats, dim=1)
+            dino_feats.append(self.feat_reduce(feat))
+        dino_feat_stack = torch.stack(dino_feats, dim=1)  # [B,V,C,Hd,Wd]
+        _, _, c, h_dino, w_dino = dino_feat_stack.shape
 
-        mini_vggt = self.mini_vggt(
-            dino_feat_stack=dino_feat_stack,
+        feat_stack_full = F.interpolate(
+            dino_feat_stack.reshape(b * v, c, h_dino, w_dino),
+            size=(h_img, w_img),
+            mode="bilinear",
+            align_corners=False,
+        ).reshape(b, v, c, h_img, w_img)
+
+        ref_feat_full = feat_stack_full[:, ref_idx]
+        mv_context_full = feat_stack_full.mean(dim=1)
+
+        vggt_out = self.vggt_depth(
+            imgs=imgs,
             ref_idx=ref_idx,
-            target_hw=(h_img, w_img),
+            ref_feat_full=ref_feat_full,
+            mv_context_full=mv_context_full,
         )
 
-        ref_feat_full = mini_vggt["ref_feat_full"]
-        mv_context_full = mini_vggt["mv_context_full"]
         ref_img = imgs[:, ref_idx]
         K_ref = Ks[:, ref_idx]
         c2w_ref = c2ws[:, ref_idx]
-        depth_full = mini_vggt["depth"]
-        conf_full = mini_vggt["confidence"]
-        fused_feat = mini_vggt["fused_feat"]
+        depth_full = vggt_out["depth"]
+        conf_full = vggt_out["confidence"]
+        fused_feat = vggt_out["fused_feat"]
 
         d_xyz, scales_full, quat_full, opacity_full, color_full = self.gaussian_head(
             ref_feat=ref_feat_full,
@@ -115,8 +133,8 @@ class MultiViewDinoDepthToGaussians(nn.Module):
             "gaussian_conf": conf_flat,
             "feat_h": h_img,
             "feat_w": w_img,
-            "dino_h": mini_vggt["token_h"],
-            "dino_w": mini_vggt["token_w"],
+            "dino_h": h_dino,
+            "dino_w": w_dino,
             "emit_stride": emit_stride,
             "ref_idx": ref_idx,
         }

@@ -21,6 +21,7 @@ class ModelConfig:
     model_version: str = "mvv3"
     dino_name: str = "facebook/dinov2-base"
     freeze_dino: bool = True
+    freeze_vggt: bool = True
     num_depth_bins: int = 48
     depth_min: float = 0.5
     depth_max: float = 20.0
@@ -29,6 +30,10 @@ class ModelConfig:
     transformer_depth: int = 4
     transformer_heads: int = 8
     max_views: int = 12
+    vggt_model_name: str = "facebook/VGGT-1B"
+    vggt_repo_path: str | None = None
+    vggt_cache_dir: str | None = None
+    vggt_local_files_only: bool = False
 
 
 @dataclass

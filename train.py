@@ -57,6 +57,11 @@ def build_model(config: ExperimentConfig, device: str):
         "transformer_depth": config.model.transformer_depth,
         "transformer_heads": config.model.transformer_heads,
         "max_views": config.model.max_views,
+        "freeze_vggt": config.model.freeze_vggt,
+        "vggt_model_name": config.model.vggt_model_name,
+        "vggt_repo_path": config.model.vggt_repo_path,
+        "vggt_cache_dir": config.model.vggt_cache_dir,
+        "vggt_local_files_only": config.model.vggt_local_files_only,
     }
 
     valid_params = inspect.signature(model_cls.__init__).parameters
