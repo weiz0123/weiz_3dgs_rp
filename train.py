@@ -61,7 +61,8 @@ def build_model(config: ExperimentConfig, device: str):
         "vggt_model_name": config.model.vggt_model_name,
         "vggt_repo_path": config.model.vggt_repo_path,
         "vggt_cache_dir": config.model.vggt_cache_dir,
-        "vggt_local_files_only": config.model.vggt_local_files_only,
+        "vggt_checkpoint_path": config.model.vggt_checkpoint_path,
+        "vggt_weights_url": config.model.vggt_weights_url,
     }
 
     valid_params = inspect.signature(model_cls.__init__).parameters

@@ -8,7 +8,7 @@ import torch.nn as nn
 from .mvv3_heads import ConvBlock
 
 
-def _resolve_hf_cache_dir(explicit_cache_dir=None):
+def _resolve_cache_root(explicit_cache_dir=None):
     if explicit_cache_dir:
         return explicit_cache_dir
 
@@ -18,17 +18,23 @@ def _resolve_hf_cache_dir(explicit_cache_dir=None):
     return None
 
 
-def _configure_hf_cache(cache_dir):
-    if not cache_dir:
-        return
+def _configure_cache_dirs(cache_root):
+    if not cache_root:
+        return None
 
-    os.makedirs(cache_dir, exist_ok=True)
-    hub_dir = os.path.join(cache_dir, "hub")
+    os.makedirs(cache_root, exist_ok=True)
+    hub_dir = os.path.join(cache_root, "hub")
+    checkpoints_dir = os.path.join(cache_root, "vggt")
     os.makedirs(hub_dir, exist_ok=True)
-    os.environ["HF_HOME"] = cache_dir
+    os.makedirs(checkpoints_dir, exist_ok=True)
+
+    os.environ["HF_HOME"] = cache_root
     os.environ["HF_HUB_CACHE"] = hub_dir
     os.environ["HUGGINGFACE_HUB_CACHE"] = hub_dir
     os.environ["TRANSFORMERS_CACHE"] = hub_dir
+    os.environ["TORCH_HOME"] = cache_root
+
+    return checkpoints_dir
 
 
 def _maybe_add_repo_path(repo_path):
@@ -76,7 +82,10 @@ class DepthFeatureAdapter(nn.Module):
 
 class OfficialVGGTDepthModule(nn.Module):
     """
-    Wrapper around the official VGGT depth branch.
+    Wrapper around the official VGGT depth branch using the README load pattern:
+      model = VGGT()
+      state_dict = torch.hub.load_state_dict_from_url(...)
+      model.load_state_dict(state_dict)
     """
 
     def __init__(
@@ -87,17 +96,20 @@ class OfficialVGGTDepthModule(nn.Module):
         vggt_model_name="facebook/VGGT-1B",
         vggt_repo_path=None,
         vggt_cache_dir=None,
-        vggt_local_files_only=False,
+        vggt_checkpoint_path=None,
+        vggt_weights_url="https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt",
         freeze_vggt=True,
     ):
         super().__init__()
         self.depth_min = depth_min
         self.depth_max = depth_max
         self.freeze_vggt = freeze_vggt
-        self.cache_dir = _resolve_hf_cache_dir(vggt_cache_dir)
-        self.local_files_only = vggt_local_files_only
+        self.vggt_model_name = vggt_model_name
+        self.cache_root = _resolve_cache_root(vggt_cache_dir)
+        self.checkpoints_dir = _configure_cache_dirs(self.cache_root)
+        self.checkpoint_path = vggt_checkpoint_path
+        self.weights_url = vggt_weights_url
 
-        _configure_hf_cache(self.cache_dir)
         _maybe_add_repo_path(vggt_repo_path)
 
         try:
@@ -108,14 +120,9 @@ class OfficialVGGTDepthModule(nn.Module):
                 "or provide its repo path in the config."
             ) from exc
 
-        try:
-            self.vggt = VGGT.from_pretrained(
-                vggt_model_name,
-                cache_dir=self.cache_dir,
-                local_files_only=self.local_files_only,
-            )
-        except TypeError:
-            self.vggt = VGGT.from_pretrained(vggt_model_name)
+        self.vggt = VGGT()
+        state_dict = self._load_state_dict()
+        self.vggt.load_state_dict(state_dict)
 
         if self.freeze_vggt:
             self.vggt.eval()
@@ -123,6 +130,27 @@ class OfficialVGGTDepthModule(nn.Module):
                 p.requires_grad = False
 
         self.feature_adapter = DepthFeatureAdapter(feat_dim)
+
+    def _load_state_dict(self):
+        if self.checkpoint_path:
+            return torch.load(self.checkpoint_path, map_location="cpu")
+
+        state_dict = torch.hub.load_state_dict_from_url(
+            self.weights_url,
+            model_dir=self.checkpoints_dir,
+            map_location="cpu",
+            progress=True,
+        )
+
+        if self.checkpoints_dir is not None:
+            downloaded_path = os.path.join(
+                self.checkpoints_dir,
+                os.path.basename(self.weights_url),
+            )
+            if os.path.exists(downloaded_path):
+                self.checkpoint_path = downloaded_path
+
+        return state_dict
 
     def forward(self, imgs, ref_idx, ref_feat_full, mv_context_full):
         batch_size, num_views = imgs.shape[:2]
@@ -147,7 +175,8 @@ class OfficialVGGTDepthModule(nn.Module):
             depth_ref = depth_ref.mean(dim=1, keepdim=True)
 
         depth_ref = depth_ref.clamp(min=self.depth_min, max=self.depth_max)
-        conf_ref = conf_ref.sigmoid() if conf_ref.min() < 0.0 or conf_ref.max() > 1.0 else conf_ref
+        if conf_ref.min() < 0.0 or conf_ref.max() > 1.0:
+            conf_ref = conf_ref.sigmoid()
 
         fused_feat = self.feature_adapter(ref_feat_full, mv_context_full, depth_ref, conf_ref)
 

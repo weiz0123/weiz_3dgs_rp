@@ -28,7 +28,8 @@ class MultiViewDinoDepthToGaussians(nn.Module):
         vggt_model_name="facebook/VGGT-1B",
         vggt_repo_path=None,
         vggt_cache_dir=None,
-        vggt_local_files_only=False,
+        vggt_checkpoint_path=None,
+        vggt_weights_url="https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt",
         freeze_vggt=True,
     ):
         super().__init__()
@@ -45,7 +46,8 @@ class MultiViewDinoDepthToGaussians(nn.Module):
             vggt_model_name=vggt_model_name,
             vggt_repo_path=vggt_repo_path,
             vggt_cache_dir=vggt_cache_dir,
-            vggt_local_files_only=vggt_local_files_only,
+            vggt_checkpoint_path=vggt_checkpoint_path,
+            vggt_weights_url=vggt_weights_url,
             freeze_vggt=freeze_vggt,
         )
         self.gaussian_head = GaussianHead(

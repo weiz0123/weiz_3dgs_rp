@@ -33,7 +33,8 @@ class ModelConfig:
     vggt_model_name: str = "facebook/VGGT-1B"
     vggt_repo_path: str | None = None
     vggt_cache_dir: str | None = None
-    vggt_local_files_only: bool = False
+    vggt_checkpoint_path: str | None = None
+    vggt_weights_url: str = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
 
 
 @dataclass
