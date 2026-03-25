@@ -140,8 +140,10 @@ def _normalize_depth_tensor(x, batch_size, num_views):
         return None
 
     if x.ndim == 5:
-        if x.shape[0] == batch_size and x.shape[1] == num_views:
+        if x.shape[0] == batch_size and x.shape[1] == num_views and x.shape[2] <= 4:
             return x
+        if x.shape[0] == batch_size and x.shape[1] == num_views and x.shape[-1] <= 4:
+            return x.permute(0, 1, 4, 2, 3).contiguous()
         if x.shape[0] == batch_size and x.shape[2] == num_views:
             return x.permute(0, 2, 1, 3, 4).contiguous()
 
@@ -197,6 +199,17 @@ def _crop_predictions_to_original(x, original_hw):
         return None
     h, w = original_hw
     return x[..., :h, :w]
+
+
+def _resize_like(x, ref):
+    if x.shape[-2:] == ref.shape[-2:]:
+        return x
+    return torch.nn.functional.interpolate(
+        x,
+        size=ref.shape[-2:],
+        mode="bilinear",
+        align_corners=False,
+    )
 
 
 class DepthFeatureAdapter(nn.Module):
@@ -319,6 +332,9 @@ class OfficialVGGTDepthModule(nn.Module):
             conf_ref = conf_ref.mean(dim=1, keepdim=True)
         if depth_ref.shape[1] != 1:
             depth_ref = depth_ref.mean(dim=1, keepdim=True)
+
+        depth_ref = _resize_like(depth_ref, ref_feat_full)
+        conf_ref = _resize_like(conf_ref, ref_feat_full)
 
         depth_ref = depth_ref.clamp(min=self.depth_min, max=self.depth_max)
         if conf_ref.min() < 0.0 or conf_ref.max() > 1.0:
