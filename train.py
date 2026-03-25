@@ -78,6 +78,72 @@ def _normalize_depth_for_tb(depth: torch.Tensor) -> torch.Tensor:
     return (depth - depth_min) / denom
 
 
+def _camera_space_points(points_world: torch.Tensor, pose_c2w: torch.Tensor) -> torch.Tensor:
+    ones = torch.ones(
+        points_world.shape[0],
+        1,
+        device=points_world.device,
+        dtype=points_world.dtype,
+    )
+    points_h = torch.cat([points_world, ones], dim=1)
+    w2c = torch.inverse(pose_c2w)
+    return (w2c @ points_h.t()).t()[:, :3]
+
+
+def _camera_visibility_stats(
+    points_world: torch.Tensor,
+    pose_c2w: torch.Tensor,
+    K: torch.Tensor,
+    H: int,
+    W: int,
+    z_thresh: float = 0.2,
+):
+    points_cam = _camera_space_points(points_world, pose_c2w)
+    x = points_cam[:, 0]
+    y = points_cam[:, 1]
+    z = points_cam[:, 2]
+
+    positive_mask = z > 0.0
+    safe_mask = z > z_thresh
+
+    z_safe = z.clamp(min=1e-6)
+    fx = K[0, 0]
+    fy = K[1, 1]
+    cx = K[0, 2]
+    cy = K[1, 2]
+    u = fx * (x / z_safe) + cx
+    v = fy * (y / z_safe) + cy
+
+    in_frame = (
+        positive_mask
+        & (u >= 0.0)
+        & (u <= float(W - 1))
+        & (v >= 0.0)
+        & (v <= float(H - 1))
+    )
+    safe_in_frame = (
+        safe_mask
+        & (u >= 0.0)
+        & (u <= float(W - 1))
+        & (v >= 0.0)
+        & (v <= float(H - 1))
+    )
+
+    positive_z = z[positive_mask]
+    if positive_z.numel() > 0:
+        z_median = float(torch.quantile(positive_z, 0.5).item())
+    else:
+        z_median = float("nan")
+
+    return {
+        "frac_z_gt_0": float(positive_mask.float().mean().item()),
+        "frac_z_gt_02": float(safe_mask.float().mean().item()),
+        "frac_in_frame": float(in_frame.float().mean().item()),
+        "frac_safe_in_frame": float(safe_in_frame.float().mean().item()),
+        "z_median_pos": z_median,
+    }
+
+
 def train_one_step(
     model,
     optimizer,
@@ -147,6 +213,7 @@ def train_one_step(
     B = input_imgs.shape[0]
 
     rendered_list = []
+    diag_stats = None
 
     for b in range(B):
 
@@ -179,6 +246,34 @@ def train_one_step(
 
         rendered_list.append(rendered)
 
+        if b == 0:
+            pose_as_is = target_pose[b].float()
+            pose_inverted = torch.inverse(pose_as_is)
+            stats_as_is = _camera_visibility_stats(
+                means3D,
+                pose_as_is,
+                target_K[b],
+                H_full,
+                W_full,
+            )
+            stats_inverted = _camera_visibility_stats(
+                means3D,
+                pose_inverted,
+                target_K[b],
+                H_full,
+                W_full,
+            )
+            diag_stats = {
+                "pose_as_is_z02": stats_as_is["frac_z_gt_02"],
+                "pose_as_is_safe_frame": stats_as_is["frac_safe_in_frame"],
+                "pose_as_is_z_median": stats_as_is["z_median_pos"],
+                "pose_inv_z02": stats_inverted["frac_z_gt_02"],
+                "pose_inv_safe_frame": stats_inverted["frac_safe_in_frame"],
+                "pose_inv_z_median": stats_inverted["z_median_pos"],
+                "render_mean_diag": float(rendered.mean().item()),
+                "render_nonblack": float((rendered > 1e-3).float().mean().item()),
+            }
+
     rendered = torch.cat(rendered_list, dim=0)
 
     depth = out["depth"]
@@ -208,6 +303,8 @@ def train_one_step(
         "opacity_mean": out["opacities"].mean().item(),
         "color_mean": out["colors"].mean().item(),
     }
+    if diag_stats is not None:
+        aux_stats.update(diag_stats)
 
     return (
         stats,
@@ -382,6 +479,12 @@ def train_re10k(config: ExperimentConfig):
                     tb_writer.add_scalar("train/render_mean", rendered.mean().item(), global_step)
                     tb_writer.add_scalar("train/opacity_mean", aux_stats["opacity_mean"], global_step)
                     tb_writer.add_scalar("train/color_mean", aux_stats["color_mean"], global_step)
+                    if "pose_as_is_z02" in aux_stats:
+                        tb_writer.add_scalar("diag/pose_as_is_z02", aux_stats["pose_as_is_z02"], global_step)
+                        tb_writer.add_scalar("diag/pose_as_is_safe_frame", aux_stats["pose_as_is_safe_frame"], global_step)
+                        tb_writer.add_scalar("diag/pose_inv_z02", aux_stats["pose_inv_z02"], global_step)
+                        tb_writer.add_scalar("diag/pose_inv_safe_frame", aux_stats["pose_inv_safe_frame"], global_step)
+                        tb_writer.add_scalar("diag/render_nonblack", aux_stats["render_nonblack"], global_step)
                     if psnr_val is not None:
                         tb_writer.add_scalar("train/psnr", psnr_val, global_step)
 
@@ -397,6 +500,14 @@ def train_re10k(config: ExperimentConfig):
                     )
                     if psnr_val is not None:
                         msg += f" psnr={psnr_val:.4f}"
+                    if "pose_as_is_z02" in aux_stats:
+                        msg += (
+                            f" | diag as_is(z>0.2={aux_stats['pose_as_is_z02']:.3f},"
+                            f" frame={aux_stats['pose_as_is_safe_frame']:.3f})"
+                            f" inv(z>0.2={aux_stats['pose_inv_z02']:.3f},"
+                            f" frame={aux_stats['pose_inv_safe_frame']:.3f})"
+                            f" render_nonblack={aux_stats['render_nonblack']:.3f}"
+                        )
                     print(msg)
 
             ##############################
