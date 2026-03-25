@@ -2,6 +2,43 @@ import os
 from dataclasses import dataclass, field
 
 
+def _default_vggt_cache_dir():
+    candidates = [
+        os.environ.get("VGGT_CACHE_DIR"),
+        "/home/weiz/links/scratch/huggingface",
+        "/lustre10/scratch/weiz/huggingface",
+    ]
+    for path in candidates:
+        if path and os.path.isdir(path):
+            return path
+    return None
+
+
+def _default_vggt_checkpoint_path():
+    candidates = [
+        os.environ.get("VGGT_CHECKPOINT_PATH"),
+        "/home/weiz/links/scratch/huggingface/vggt/model.pt",
+        "/lustre10/scratch/weiz/huggingface/vggt/model.pt",
+    ]
+    for path in candidates:
+        if path and os.path.isfile(path):
+            return path
+    return None
+
+
+def _default_vggt_repo_path():
+    candidates = [
+        os.environ.get("VGGT_REPO_PATH"),
+        "/home/weiz/links/scratch/vggt",
+        "/lustre10/scratch/weiz/vggt",
+        "/lustre10/scratch/weiz/repos/vggt",
+    ]
+    for path in candidates:
+        if path and os.path.isdir(path):
+            return path
+    return None
+
+
 @dataclass
 class DataConfig:
     data_root: str = "datasets/realestate10k_subset"
@@ -32,9 +69,9 @@ class ModelConfig:
     transformer_heads: int = 8
     max_views: int = 12
     vggt_model_name: str = "facebook/VGGT-1B"
-    vggt_repo_path: str | None = field(default_factory=lambda: os.environ.get("VGGT_REPO_PATH"))
-    vggt_cache_dir: str | None = None
-    vggt_checkpoint_path: str | None = None
+    vggt_repo_path: str | None = field(default_factory=_default_vggt_repo_path)
+    vggt_cache_dir: str | None = field(default_factory=_default_vggt_cache_dir)
+    vggt_checkpoint_path: str | None = field(default_factory=_default_vggt_checkpoint_path)
     vggt_weights_url: str = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
 
 

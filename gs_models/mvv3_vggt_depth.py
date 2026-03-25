@@ -17,6 +17,7 @@ def _resolve_cache_root(explicit_cache_dir=None):
     user = os.environ.get("USER") or os.environ.get("USERNAME")
 
     candidates = [
+        "/home/weiz/links/scratch/huggingface",
         os.path.join(parent_root, "huggingface"),
         os.path.join(repo_root, "huggingface"),
         "/scratch/huggingface",
@@ -25,6 +26,7 @@ def _resolve_cache_root(explicit_cache_dir=None):
     if user:
         candidates.extend(
             [
+                os.path.join("/home", user, "links", "scratch", "huggingface"),
                 os.path.join("/lustre10", "scratch", user, "huggingface"),
                 os.path.join("/scratch", user, "huggingface"),
             ]
@@ -76,6 +78,7 @@ def _candidate_vggt_repo_paths(explicit_repo_path=None):
 
     candidates.extend(
         [
+            os.path.join("/home", user, "links", "scratch", "vggt") if user else None,
             os.path.join(repo_root, "vggt"),
             os.path.join(repo_root, "external", "vggt"),
             os.path.join(parent_root, "vggt"),
@@ -86,6 +89,7 @@ def _candidate_vggt_repo_paths(explicit_repo_path=None):
     if user:
         candidates.extend(
             [
+                os.path.join("/home", user, "links", "scratch", "repos", "vggt"),
                 os.path.join("/lustre10", "scratch", user, "vggt"),
                 os.path.join("/lustre10", "scratch", user, "repos", "vggt"),
                 os.path.join("/scratch", user, "vggt"),
