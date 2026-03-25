@@ -90,6 +90,9 @@ class TrainingConfig:
     metric_every: int = 1
     save_best_by: str = "loss"
     log_every_n_steps: int = 10
+    enable_tensorboard: bool = True
+    tensorboard_every_n_steps: int = 10
+    tensorboard_log_dir: str | None = None
     visualize_every_n_epochs: int = 2
     visualize_every_n_steps: int = 20
 

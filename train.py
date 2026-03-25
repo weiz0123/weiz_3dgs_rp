@@ -24,6 +24,7 @@ cv2.setNumThreads(0)
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 torch.set_num_threads(1)
 torch.set_num_interop_threads(1)
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -68,6 +69,13 @@ def build_model(config: ExperimentConfig, device: str):
     valid_params = inspect.signature(model_cls.__init__).parameters
     filtered_kwargs = {k: v for k, v in model_kwargs.items() if k in valid_params}
     return model_cls(**filtered_kwargs).to(device)
+
+
+def _normalize_depth_for_tb(depth: torch.Tensor) -> torch.Tensor:
+    depth_min = depth.amin(dim=(-2, -1), keepdim=True)
+    depth_max = depth.amax(dim=(-2, -1), keepdim=True)
+    denom = (depth_max - depth_min).clamp(min=1e-6)
+    return (depth - depth_min) / denom
 
 
 def train_one_step(
@@ -196,7 +204,20 @@ def train_one_step(
     loss.backward()
     optimizer.step()
 
-    return stats, metas[0], rendered.detach(), target_img.detach(), depth.detach(), input_imgs.detach()
+    aux_stats = {
+        "opacity_mean": out["opacities"].mean().item(),
+        "color_mean": out["colors"].mean().item(),
+    }
+
+    return (
+        stats,
+        metas[0],
+        rendered.detach(),
+        target_img.detach(),
+        depth.detach(),
+        input_imgs.detach(),
+        aux_stats,
+    )
 
 def train_re10k(config: ExperimentConfig):
     if config.data.num_target_views != 1:
@@ -205,10 +226,15 @@ def train_re10k(config: ExperimentConfig):
     device = resolve_device(config.training.device)
     save_dir = os.path.join(config.training.save_dir, f"run_{config.training.run_id}")
     os.makedirs(save_dir, exist_ok=True)
+    tb_log_dir = config.training.tensorboard_log_dir or os.path.join(save_dir, "tensorboard")
 
     config_path = os.path.join(save_dir, "config.json")
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(asdict(config), f, indent=2)
+
+    tb_writer = SummaryWriter(log_dir=tb_log_dir) if config.training.enable_tensorboard else None
+    if tb_writer is not None:
+        tb_writer.add_text("config/json", json.dumps(asdict(config), indent=2), global_step=0)
 
     dataset = RealEstate10KDataset(config.data.data_root)
     print("loading datasets...\n")
@@ -271,8 +297,8 @@ def train_re10k(config: ExperimentConfig):
 
     if not os.path.exists(csv_log_path):
         with open(csv_log_path, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow([
+            csv_writer = csv.writer(f)
+            csv_writer.writerow([
                 "epoch",
                 "avg_loss",
                 "avg_l1",
@@ -288,6 +314,7 @@ def train_re10k(config: ExperimentConfig):
 ##############################
 # Training Loop
 ##############################
+    global_step = start_epoch * (config.training.max_scenes_per_epoch or len(loader))
     for ep in range(start_epoch, config.training.epochs):
         total_loss_val = 0.0
         total_l1_val = 0.0
@@ -309,7 +336,7 @@ def train_re10k(config: ExperimentConfig):
             # 
             ##############################
             try:
-                stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                stats, meta, rendered, target_out, depth, input_imgs, aux_stats = train_one_step(
                     model=model,
                     optimizer=optimizer,
                     scene_batch=scene_batch,
@@ -342,7 +369,22 @@ def train_re10k(config: ExperimentConfig):
                     psnr_count += 1
                 else:
                     psnr_val = None
-                
+
+                if (
+                    tb_writer is not None
+                    and global_step % config.training.tensorboard_every_n_steps == 0
+                ):
+                    tb_writer.add_scalar("train/loss_total", stats["loss_total"], global_step)
+                    tb_writer.add_scalar("train/loss_l1", stats["loss_l1"], global_step)
+                    tb_writer.add_scalar("train/loss_ssim", stats["loss_ssim"], global_step)
+                    tb_writer.add_scalar("train/loss_smooth", stats["loss_smooth"], global_step)
+                    tb_writer.add_scalar("train/depth_mean", depth.mean().item(), global_step)
+                    tb_writer.add_scalar("train/render_mean", rendered.mean().item(), global_step)
+                    tb_writer.add_scalar("train/opacity_mean", aux_stats["opacity_mean"], global_step)
+                    tb_writer.add_scalar("train/color_mean", aux_stats["color_mean"], global_step)
+                    if psnr_val is not None:
+                        tb_writer.add_scalar("train/psnr", psnr_val, global_step)
+
                 if i % config.training.log_every_n_steps == 0:
                     msg = (
                         f"[Epoch {ep+1} | Scene {i}] "
@@ -365,6 +407,15 @@ def train_re10k(config: ExperimentConfig):
                     ep % config.training.visualize_every_n_epochs == 0
                     and i % config.training.visualize_every_n_steps == 0
                 ):
+                    if tb_writer is not None:
+                        tb_writer.add_images("train/input_views", input_imgs[0], global_step)
+                        tb_writer.add_image("train/target", target_out[0].clamp(0, 1), global_step)
+                        tb_writer.add_image("train/rendered", rendered[0].clamp(0, 1), global_step)
+                        tb_writer.add_image(
+                            "train/depth",
+                            _normalize_depth_for_tb(depth[0]).repeat(3, 1, 1),
+                            global_step,
+                        )
                     save_visuals(
                         save_dir=os.path.join(save_dir, "visuals"),
                         epoch=ep,
@@ -379,6 +430,8 @@ def train_re10k(config: ExperimentConfig):
                 torch.cuda.empty_cache()
                 traceback.print_exc()
                 continue
+            finally:
+                global_step += 1
          
         avg = total_loss_val / max(steps, 1)
         avg_l1 = total_l1_val / max(steps, 1)
@@ -439,8 +492,8 @@ def train_re10k(config: ExperimentConfig):
             )
 
         with open(csv_log_path, "a", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow([
+            csv_writer = csv.writer(f)
+            csv_writer.writerow([
                 ep + 1,
                 avg,
                 avg_l1,
@@ -451,6 +504,19 @@ def train_re10k(config: ExperimentConfig):
                 best_metric if best_metric is not None else "",
                 int(saved_as_best)
             ])
+
+        if tb_writer is not None:
+            tb_writer.add_scalar("epoch/avg_loss", avg, ep + 1)
+            tb_writer.add_scalar("epoch/avg_l1", avg_l1, ep + 1)
+            tb_writer.add_scalar("epoch/avg_ssim", avg_ssim, ep + 1)
+            tb_writer.add_scalar("epoch/avg_smooth", avg_smooth, ep + 1)
+            if avg_psnr is not None:
+                tb_writer.add_scalar("epoch/avg_psnr", avg_psnr, ep + 1)
+            if best_metric is not None:
+                tb_writer.add_scalar(f"epoch/best_{config.training.save_best_by}", best_metric, ep + 1)
+
+    if tb_writer is not None:
+        tb_writer.close()
 
     return model
 
