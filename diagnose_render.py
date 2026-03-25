@@ -147,6 +147,15 @@ def _save_render(rendered: torch.Tensor | None, path: str):
     vutils.save_image(rendered.clamp(0, 1), path)
 
 
+def configure_vggt_paths(args):
+    if args.vggt_repo_path:
+        os.environ["VGGT_REPO_PATH"] = args.vggt_repo_path
+    if args.vggt_checkpoint_path:
+        os.environ["VGGT_CHECKPOINT_PATH"] = args.vggt_checkpoint_path
+    if args.vggt_cache_dir:
+        os.environ["VGGT_CACHE_DIR"] = args.vggt_cache_dir
+
+
 def resolve_device(device_name: str) -> str:
     if device_name == "auto":
         return "cuda" if torch.cuda.is_available() else "cpu"
@@ -194,6 +203,7 @@ def load_model_for_diagnostics(ckpt_path: str, device: str):
 
 @torch.no_grad()
 def run_diagnostics(args):
+    configure_vggt_paths(args)
     device = resolve_device(args.device)
     os.makedirs(args.save_dir, exist_ok=True)
 
@@ -350,6 +360,9 @@ def build_argparser():
         default=config.data.input_view_sampling,
         choices=["nearest", "sparse", "pose_sparse"],
     )
+    parser.add_argument("--vggt-repo-path", default=os.environ.get("VGGT_REPO_PATH"))
+    parser.add_argument("--vggt-checkpoint-path", default=os.environ.get("VGGT_CHECKPOINT_PATH"))
+    parser.add_argument("--vggt-cache-dir", default=os.environ.get("VGGT_CACHE_DIR"))
     parser.add_argument("--device", default="auto")
     parser.add_argument("--seed", type=int, default=None)
     return parser
