@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field
 
 
@@ -31,7 +32,7 @@ class ModelConfig:
     transformer_heads: int = 8
     max_views: int = 12
     vggt_model_name: str = "facebook/VGGT-1B"
-    vggt_repo_path: str | None = None
+    vggt_repo_path: str | None = field(default_factory=lambda: os.environ.get("VGGT_REPO_PATH"))
     vggt_cache_dir: str | None = None
     vggt_checkpoint_path: str | None = None
     vggt_weights_url: str = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
