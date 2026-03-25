@@ -129,18 +129,53 @@ def _camera_visibility_stats(
         & (v <= float(H - 1))
     )
 
+    def summarize(values: torch.Tensor):
+        if values.numel() == 0:
+            return {
+                "min": float("nan"),
+                "p05": float("nan"),
+                "median": float("nan"),
+                "p95": float("nan"),
+                "max": float("nan"),
+            }
+        return {
+            "min": float(values.min().item()),
+            "p05": float(torch.quantile(values, 0.05).item()),
+            "median": float(torch.quantile(values, 0.5).item()),
+            "p95": float(torch.quantile(values, 0.95).item()),
+            "max": float(values.max().item()),
+        }
+
     positive_z = z[positive_mask]
-    if positive_z.numel() > 0:
-        z_median = float(torch.quantile(positive_z, 0.5).item())
-    else:
-        z_median = float("nan")
+    positive_x = x[positive_mask]
+    positive_y = y[positive_mask]
+    positive_u = u[positive_mask]
+    positive_v = v[positive_mask]
+
+    z_summary = summarize(positive_z)
+    x_summary = summarize(positive_x)
+    y_summary = summarize(positive_y)
+    u_summary = summarize(positive_u)
+    v_summary = summarize(positive_v)
 
     return {
         "frac_z_gt_0": float(positive_mask.float().mean().item()),
         "frac_z_gt_02": float(safe_mask.float().mean().item()),
         "frac_in_frame": float(in_frame.float().mean().item()),
         "frac_safe_in_frame": float(safe_in_frame.float().mean().item()),
-        "z_median_pos": z_median,
+        "x_median_pos": x_summary["median"],
+        "y_median_pos": y_summary["median"],
+        "z_median_pos": z_summary["median"],
+        "u_min_pos": u_summary["min"],
+        "u_p05_pos": u_summary["p05"],
+        "u_median_pos": u_summary["median"],
+        "u_p95_pos": u_summary["p95"],
+        "u_max_pos": u_summary["max"],
+        "v_min_pos": v_summary["min"],
+        "v_p05_pos": v_summary["p05"],
+        "v_median_pos": v_summary["median"],
+        "v_p95_pos": v_summary["p95"],
+        "v_max_pos": v_summary["max"],
     }
 
 
@@ -266,7 +301,19 @@ def train_one_step(
             diag_stats = {
                 "pose_as_is_z02": stats_as_is["frac_z_gt_02"],
                 "pose_as_is_safe_frame": stats_as_is["frac_safe_in_frame"],
+                "pose_as_is_x_median": stats_as_is["x_median_pos"],
+                "pose_as_is_y_median": stats_as_is["y_median_pos"],
                 "pose_as_is_z_median": stats_as_is["z_median_pos"],
+                "pose_as_is_u_min": stats_as_is["u_min_pos"],
+                "pose_as_is_u_p05": stats_as_is["u_p05_pos"],
+                "pose_as_is_u_median": stats_as_is["u_median_pos"],
+                "pose_as_is_u_p95": stats_as_is["u_p95_pos"],
+                "pose_as_is_u_max": stats_as_is["u_max_pos"],
+                "pose_as_is_v_min": stats_as_is["v_min_pos"],
+                "pose_as_is_v_p05": stats_as_is["v_p05_pos"],
+                "pose_as_is_v_median": stats_as_is["v_median_pos"],
+                "pose_as_is_v_p95": stats_as_is["v_p95_pos"],
+                "pose_as_is_v_max": stats_as_is["v_max_pos"],
                 "pose_inv_z02": stats_inverted["frac_z_gt_02"],
                 "pose_inv_safe_frame": stats_inverted["frac_safe_in_frame"],
                 "pose_inv_z_median": stats_inverted["z_median_pos"],
@@ -427,7 +474,19 @@ def train_re10k(config: ExperimentConfig):
                 "color_mean",
                 "pose_as_is_z02",
                 "pose_as_is_safe_frame",
+                "pose_as_is_x_median",
+                "pose_as_is_y_median",
                 "pose_as_is_z_median",
+                "pose_as_is_u_min",
+                "pose_as_is_u_p05",
+                "pose_as_is_u_median",
+                "pose_as_is_u_p95",
+                "pose_as_is_u_max",
+                "pose_as_is_v_min",
+                "pose_as_is_v_p05",
+                "pose_as_is_v_median",
+                "pose_as_is_v_p95",
+                "pose_as_is_v_max",
                 "pose_inv_z02",
                 "pose_inv_safe_frame",
                 "pose_inv_z_median",
@@ -513,7 +572,19 @@ def train_re10k(config: ExperimentConfig):
                         float(aux_stats["color_mean"]),
                         "" if "pose_as_is_z02" not in aux_stats else float(aux_stats["pose_as_is_z02"]),
                         "" if "pose_as_is_safe_frame" not in aux_stats else float(aux_stats["pose_as_is_safe_frame"]),
+                        "" if "pose_as_is_x_median" not in aux_stats else float(aux_stats["pose_as_is_x_median"]),
+                        "" if "pose_as_is_y_median" not in aux_stats else float(aux_stats["pose_as_is_y_median"]),
                         "" if "pose_as_is_z_median" not in aux_stats else float(aux_stats["pose_as_is_z_median"]),
+                        "" if "pose_as_is_u_min" not in aux_stats else float(aux_stats["pose_as_is_u_min"]),
+                        "" if "pose_as_is_u_p05" not in aux_stats else float(aux_stats["pose_as_is_u_p05"]),
+                        "" if "pose_as_is_u_median" not in aux_stats else float(aux_stats["pose_as_is_u_median"]),
+                        "" if "pose_as_is_u_p95" not in aux_stats else float(aux_stats["pose_as_is_u_p95"]),
+                        "" if "pose_as_is_u_max" not in aux_stats else float(aux_stats["pose_as_is_u_max"]),
+                        "" if "pose_as_is_v_min" not in aux_stats else float(aux_stats["pose_as_is_v_min"]),
+                        "" if "pose_as_is_v_p05" not in aux_stats else float(aux_stats["pose_as_is_v_p05"]),
+                        "" if "pose_as_is_v_median" not in aux_stats else float(aux_stats["pose_as_is_v_median"]),
+                        "" if "pose_as_is_v_p95" not in aux_stats else float(aux_stats["pose_as_is_v_p95"]),
+                        "" if "pose_as_is_v_max" not in aux_stats else float(aux_stats["pose_as_is_v_max"]),
                         "" if "pose_inv_z02" not in aux_stats else float(aux_stats["pose_inv_z02"]),
                         "" if "pose_inv_safe_frame" not in aux_stats else float(aux_stats["pose_inv_safe_frame"]),
                         "" if "pose_inv_z_median" not in aux_stats else float(aux_stats["pose_inv_z_median"]),
@@ -560,6 +631,8 @@ def train_re10k(config: ExperimentConfig):
                             f" frame={aux_stats['pose_as_is_safe_frame']:.3f})"
                             f" inv(z>0.2={aux_stats['pose_inv_z02']:.3f},"
                             f" frame={aux_stats['pose_inv_safe_frame']:.3f})"
+                            f" uv95=({aux_stats['pose_as_is_u_p05']:.1f},{aux_stats['pose_as_is_u_p95']:.1f};"
+                            f"{aux_stats['pose_as_is_v_p05']:.1f},{aux_stats['pose_as_is_v_p95']:.1f})"
                             f" render_nonblack={aux_stats['render_nonblack']:.3f}"
                         )
                     print(msg)
