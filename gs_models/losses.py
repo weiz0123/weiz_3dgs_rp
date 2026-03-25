@@ -58,7 +58,7 @@ def total_loss(
     lambda_ssim=0.2,
     lambda_smooth=0.05,
     lambda_scale=1e-3,
-    lambda_opacity=1e-3,
+    lambda_opacity=0.0,
 ):
     l1 = l1_loss(rendered, target)
     ssim_term = 1.0 - simple_ssim(rendered, target)

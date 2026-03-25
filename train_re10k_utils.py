@@ -68,6 +68,25 @@ def _camera_centers_from_poses(poses):
     return poses[:, :3, 3]
 
 
+def _prioritize_reference_view(input_ids, target_id, poses=None):
+    if len(input_ids) <= 1:
+        return list(input_ids)
+
+    if poses is None:
+        best_id = min(input_ids, key=lambda idx: abs(idx - target_id))
+    else:
+        centers = _camera_centers_from_poses(poses)
+        target_center = centers[target_id]
+        best_id = min(
+            input_ids,
+            key=lambda idx: torch.norm(centers[idx] - target_center, p=2).item(),
+        )
+
+    ordered = [best_id]
+    ordered.extend(idx for idx in input_ids if idx != best_id)
+    return ordered
+
+
 def _select_pose_sparse_ids(candidate_ids, poses, target_id, n_input):
     if len(candidate_ids) < n_input:
         raise ValueError(
@@ -208,6 +227,7 @@ def scene_to_model_inputs(
                 sampling=input_view_sampling,
                 poses=poses,
             )
+            input_ids = _prioritize_reference_view(input_ids, target_id, poses=poses)
 
             imgs.append(images[input_ids])
             Ks_out.append(Ks[input_ids])
@@ -272,6 +292,7 @@ def scene_to_model_inputs(
         sampling=input_view_sampling,
         poses=poses,
     )
+    input_ids = _prioritize_reference_view(input_ids, target_id, poses=poses)
 
     input_imgs = images[input_ids].unsqueeze(0).to(device)
     input_Ks = Ks[input_ids].unsqueeze(0).to(device)

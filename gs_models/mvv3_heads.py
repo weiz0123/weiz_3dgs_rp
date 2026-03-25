@@ -43,10 +43,10 @@ class GaussianHead(nn.Module):
 
         quat = F.normalize(q_raw, dim=1, eps=1e-6)
         base_scales = 0.002 + 0.03 * torch.sigmoid(s_raw)
-        opacity_raw = torch.sigmoid(a_raw)
-        color = torch.sigmoid(c_raw)
+        opacity_raw = torch.sigmoid(a_raw + 1.0)
+        color = (rgb + 0.25 * torch.tanh(c_raw)).clamp(0.0, 1.0)
 
         scales = base_scales * (1.25 - 0.75 * conf)
-        opacity = opacity_raw * (0.25 + 0.75 * conf)
+        opacity = opacity_raw * (0.35 + 0.65 * conf)
 
         return d_xyz, scales, quat, opacity, color
