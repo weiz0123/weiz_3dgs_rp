@@ -81,16 +81,16 @@ class RealEstate10KDataset(Dataset):
                 # -------------------
                 # pose
                 # -------------------
-                # RealEstate10K metadata stores camera extrinsics; the rest of this
-                # codebase consistently expects camera-to-world transforms.
-                # Build the extrinsic matrix first, then invert once here so every
-                # downstream geometry path operates on true c2w poses.
-                R = np.array(vals[7:16], dtype=np.float32).reshape(3,3)
-                t = np.array(vals[16:19], dtype=np.float32)
+                # RealEstate10K stores a full 3x4 extrinsic matrix row-wise after
+                # the intrinsics/distortion fields:
+                #   [r00 r01 r02 t0  r10 r11 r12 t1  r20 r21 r22 t2]
+                # The rest of this codebase consistently expects camera-to-world
+                # transforms, so we parse the matrix correctly as w2c first and
+                # invert it once here.
+                extrinsic = np.array(vals[7:19], dtype=np.float32).reshape(3, 4)
 
                 w2c = np.eye(4, dtype=np.float32)
-                w2c[:3, :3] = R
-                w2c[:3, 3] = t
+                w2c[:3, :4] = extrinsic
                 pose = np.linalg.inv(w2c).astype(np.float32)
 
                 # -------------------
