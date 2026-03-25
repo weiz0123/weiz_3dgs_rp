@@ -177,6 +177,17 @@ def _pad_images_to_patch_multiple(imgs, patch_h, patch_w):
     if pad_h == 0 and pad_w == 0:
         return imgs, (h, w)
 
+    if imgs.ndim == 5:
+        b, v, c, _, _ = imgs.shape
+        imgs_4d = imgs.reshape(b * v, c, h, w)
+        padded_4d = torch.nn.functional.pad(
+            imgs_4d,
+            (0, pad_w, 0, pad_h),
+            mode="replicate",
+        )
+        padded = padded_4d.reshape(b, v, c, h + pad_h, w + pad_w)
+        return padded, (h, w)
+
     padded = torch.nn.functional.pad(imgs, (0, pad_w, 0, pad_h), mode="replicate")
     return padded, (h, w)
 
