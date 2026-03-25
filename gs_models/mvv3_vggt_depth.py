@@ -161,6 +161,33 @@ def _normalize_depth_tensor(x, batch_size, num_views):
     raise ValueError(f"Unsupported VGGT depth/conf shape: {tuple(x.shape)}")
 
 
+def _normalize_patch_size(patch_size):
+    if isinstance(patch_size, int):
+        return patch_size, patch_size
+    if isinstance(patch_size, (tuple, list)) and len(patch_size) == 2:
+        return int(patch_size[0]), int(patch_size[1])
+    raise ValueError(f"Unsupported patch size format: {patch_size}")
+
+
+def _pad_images_to_patch_multiple(imgs, patch_h, patch_w):
+    h, w = imgs.shape[-2:]
+    pad_h = (patch_h - (h % patch_h)) % patch_h
+    pad_w = (patch_w - (w % patch_w)) % patch_w
+
+    if pad_h == 0 and pad_w == 0:
+        return imgs, (h, w)
+
+    padded = torch.nn.functional.pad(imgs, (0, pad_w, 0, pad_h), mode="replicate")
+    return padded, (h, w)
+
+
+def _crop_predictions_to_original(x, original_hw):
+    if x is None:
+        return None
+    h, w = original_hw
+    return x[..., :h, :w]
+
+
 class DepthFeatureAdapter(nn.Module):
     def __init__(self, feat_dim):
         super().__init__()
@@ -216,6 +243,7 @@ class OfficialVGGTDepthModule(nn.Module):
                 p.requires_grad = False
 
         self.feature_adapter = DepthFeatureAdapter(feat_dim)
+        self.patch_h, self.patch_w = self._resolve_patch_size()
 
     def _load_state_dict(self):
         if self.checkpoint_path:
@@ -238,19 +266,40 @@ class OfficialVGGTDepthModule(nn.Module):
 
         return state_dict
 
+    def _resolve_patch_size(self):
+        candidates = [
+            getattr(getattr(self.vggt, "aggregator", None), "patch_size", None),
+            getattr(getattr(getattr(self.vggt, "aggregator", None), "patch_embed", None), "patch_size", None),
+            getattr(getattr(self.vggt, "patch_embed", None), "patch_size", None),
+        ]
+
+        for candidate in candidates:
+            if candidate is not None:
+                return _normalize_patch_size(candidate)
+
+        return 14, 14
+
     def forward(self, imgs, ref_idx, ref_feat_full, mv_context_full):
         batch_size, num_views = imgs.shape[:2]
+        imgs_for_vggt, original_hw = _pad_images_to_patch_multiple(
+            imgs,
+            self.patch_h,
+            self.patch_w,
+        )
 
         grad_ctx = torch.no_grad() if self.freeze_vggt else nullcontext()
         with grad_ctx:
-            tokens, ps_idx = self.vggt.aggregator(imgs)
-            depth_all, conf_all = self.vggt.depth_head(tokens, imgs, ps_idx)
+            tokens, ps_idx = self.vggt.aggregator(imgs_for_vggt)
+            depth_all, conf_all = self.vggt.depth_head(tokens, imgs_for_vggt, ps_idx)
 
         depth_all = _normalize_depth_tensor(depth_all, batch_size, num_views).float()
         if conf_all is None:
             conf_all = torch.ones_like(depth_all)
         else:
             conf_all = _normalize_depth_tensor(conf_all, batch_size, num_views).float()
+
+        depth_all = _crop_predictions_to_original(depth_all, original_hw)
+        conf_all = _crop_predictions_to_original(conf_all, original_hw)
 
         depth_ref = depth_all[:, ref_idx]
         conf_ref = conf_all[:, ref_idx]
