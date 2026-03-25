@@ -169,6 +169,18 @@ def _cam_to_world_points(points_cam: torch.Tensor, c2w: torch.Tensor) -> torch.T
     return (c2w @ points_h.t()).t()[:, :3]
 
 
+def _apply_camera_axis_flip(points_cam: torch.Tensor, flip_mode: str) -> torch.Tensor:
+    if flip_mode == "none":
+        return points_cam
+    if flip_mode == "y":
+        scale = torch.tensor([1.0, -1.0, 1.0], device=points_cam.device, dtype=points_cam.dtype)
+        return points_cam * scale
+    if flip_mode == "yz":
+        scale = torch.tensor([1.0, -1.0, -1.0], device=points_cam.device, dtype=points_cam.dtype)
+        return points_cam * scale
+    raise ValueError(f"Unsupported camera axis flip mode: {flip_mode}")
+
+
 def _summarize_image(image: torch.Tensor):
     return {
         "mean": float(image.mean().item()),
@@ -260,6 +272,35 @@ def _camera_visibility_stats(
         "v_median_pos": v_summary["median"],
         "v_p95_pos": v_summary["p95"],
         "v_max_pos": v_summary["max"],
+    }
+
+
+def _visibility_log_fields(stats: dict):
+    return {
+        "z02": stats["frac_z_gt_02"],
+        "safe_frame": stats["frac_safe_in_frame"],
+        "z_median": stats["z_median_pos"],
+        "u_p05": stats["u_p05_pos"],
+        "u_p95": stats["u_p95_pos"],
+        "v_p05": stats["v_p05_pos"],
+        "v_p95": stats["v_p95_pos"],
+    }
+
+
+def _summarize_visibility_variants(named_stats: dict):
+    best_name = max(
+        named_stats,
+        key=lambda name: (
+            named_stats[name]["frac_safe_in_frame"],
+            named_stats[name]["frac_z_gt_02"],
+        ),
+    )
+    base_safe = named_stats["as_is"]["frac_safe_in_frame"]
+    best_safe = named_stats[best_name]["frac_safe_in_frame"]
+    return {
+        "best_variant": best_name,
+        "best_safe_frame": float(best_safe),
+        "best_gain_safe_frame": float(best_safe - base_safe),
     }
 
 
@@ -422,6 +463,64 @@ def train_one_step(
                 H_full,
                 W_full,
             )
+            means_world_yflip = _cam_to_world_points(
+                _apply_camera_axis_flip(means_ref_cam, "y"),
+                ref_pose,
+            )
+            means_world_yzflip = _cam_to_world_points(
+                _apply_camera_axis_flip(means_ref_cam, "yz"),
+                ref_pose,
+            )
+            raw_world_yflip = _cam_to_world_points(
+                _apply_camera_axis_flip(raw_ref_cam_emit_points, "y"),
+                ref_pose,
+            )
+            raw_world_yzflip = _cam_to_world_points(
+                _apply_camera_axis_flip(raw_ref_cam_emit_points, "yz"),
+                ref_pose,
+            )
+            stats_yflip = _camera_visibility_stats(
+                means_world_yflip,
+                pose_as_is,
+                target_K_b,
+                H_full,
+                W_full,
+            )
+            stats_yzflip = _camera_visibility_stats(
+                means_world_yzflip,
+                pose_as_is,
+                target_K_b,
+                H_full,
+                W_full,
+            )
+            raw_stats_yflip = _camera_visibility_stats(
+                raw_world_yflip,
+                pose_as_is,
+                target_K_b,
+                H_full,
+                W_full,
+            )
+            raw_stats_yzflip = _camera_visibility_stats(
+                raw_world_yzflip,
+                pose_as_is,
+                target_K_b,
+                H_full,
+                W_full,
+            )
+            pose_variant_summary = _summarize_visibility_variants(
+                {
+                    "as_is": stats_as_is,
+                    "yflip": stats_yflip,
+                    "yzflip": stats_yzflip,
+                }
+            )
+            raw_pose_variant_summary = _summarize_visibility_variants(
+                {
+                    "as_is": raw_stats_as_is,
+                    "yflip": raw_stats_yflip,
+                    "yzflip": raw_stats_yzflip,
+                }
+            )
 
             ref_center = ref_pose[:3, 3]
             target_center = pose_as_is[:3, 3]
@@ -454,6 +553,12 @@ def train_one_step(
                 "raw_pose_as_is_v_p95": raw_stats_as_is["v_p95_pos"],
                 "raw_pose_inv_z02": raw_stats_inverted["frac_z_gt_02"],
                 "raw_pose_inv_safe_frame": raw_stats_inverted["frac_safe_in_frame"],
+                "pose_variant_best": pose_variant_summary["best_variant"],
+                "pose_variant_best_safe_frame": pose_variant_summary["best_safe_frame"],
+                "pose_variant_best_gain_safe_frame": pose_variant_summary["best_gain_safe_frame"],
+                "raw_pose_variant_best": raw_pose_variant_summary["best_variant"],
+                "raw_pose_variant_best_safe_frame": raw_pose_variant_summary["best_safe_frame"],
+                "raw_pose_variant_best_gain_safe_frame": raw_pose_variant_summary["best_gain_safe_frame"],
                 "depth_emit_count": int(depth_b[::emit_stride, ::emit_stride].numel()),
                 "baseline_ref_target": float(baseline.item()),
                 "ref_fx": float(ref_K[0, 0].item()),
@@ -467,6 +572,10 @@ def train_one_step(
                 "render_mean_diag": float(rendered.mean().item()),
                 "render_nonblack": float((rendered > 1e-3).float().mean().item()),
             }
+            diag_stats.update(_prefix_dict("pose_yflip", _visibility_log_fields(stats_yflip)))
+            diag_stats.update(_prefix_dict("pose_yzflip", _visibility_log_fields(stats_yzflip)))
+            diag_stats.update(_prefix_dict("raw_pose_yflip", _visibility_log_fields(raw_stats_yflip)))
+            diag_stats.update(_prefix_dict("raw_pose_yzflip", _visibility_log_fields(raw_stats_yzflip)))
             diag_stats.update(_prefix_dict("depth_full", _summarize_1d(depth_b)))
             diag_stats.update(_prefix_dict("opacity", _summarize_1d(opacities.squeeze(-1))))
             diag_stats.update(_prefix_dict("scale_x", _summarize_1d(scales[:, 0])))
@@ -793,6 +902,12 @@ def train_re10k(config: ExperimentConfig):
                         tb_writer.add_scalar("diag/pose_as_is_safe_frame", aux_stats["pose_as_is_safe_frame"], global_step)
                         tb_writer.add_scalar("diag/pose_inv_z02", aux_stats["pose_inv_z02"], global_step)
                         tb_writer.add_scalar("diag/pose_inv_safe_frame", aux_stats["pose_inv_safe_frame"], global_step)
+                        tb_writer.add_scalar("diag/pose_yflip_safe_frame", aux_stats["pose_yflip_safe_frame"], global_step)
+                        tb_writer.add_scalar("diag/pose_yzflip_safe_frame", aux_stats["pose_yzflip_safe_frame"], global_step)
+                        tb_writer.add_scalar("diag/raw_pose_yflip_safe_frame", aux_stats["raw_pose_yflip_safe_frame"], global_step)
+                        tb_writer.add_scalar("diag/raw_pose_yzflip_safe_frame", aux_stats["raw_pose_yzflip_safe_frame"], global_step)
+                        tb_writer.add_scalar("diag/pose_variant_best_gain_safe_frame", aux_stats["pose_variant_best_gain_safe_frame"], global_step)
+                        tb_writer.add_scalar("diag/raw_pose_variant_best_gain_safe_frame", aux_stats["raw_pose_variant_best_gain_safe_frame"], global_step)
                         tb_writer.add_scalar("diag/render_nonblack", aux_stats["render_nonblack"], global_step)
                     if psnr_val is not None:
                         tb_writer.add_scalar("train/psnr", psnr_val, global_step)
@@ -820,6 +935,13 @@ def train_re10k(config: ExperimentConfig):
                             f"{aux_stats['pose_as_is_v_p05']:.1f},{aux_stats['pose_as_is_v_p95']:.1f})"
                             f" raw_uv95=({aux_stats['raw_pose_as_is_u_p05']:.1f},{aux_stats['raw_pose_as_is_u_p95']:.1f};"
                             f"{aux_stats['raw_pose_as_is_v_p05']:.1f},{aux_stats['raw_pose_as_is_v_p95']:.1f})"
+                            f" flip(frame y={aux_stats['pose_yflip_safe_frame']:.3f},"
+                            f" yz={aux_stats['pose_yzflip_safe_frame']:.3f},"
+                            f" best={aux_stats['pose_variant_best']},"
+                            f" gain={aux_stats['pose_variant_best_gain_safe_frame']:.3f})"
+                            f" raw_flip(y={aux_stats['raw_pose_yflip_safe_frame']:.3f},"
+                            f" yz={aux_stats['raw_pose_yzflip_safe_frame']:.3f},"
+                            f" best={aux_stats['raw_pose_variant_best']})"
                             f" depth_med={aux_stats['depth_full_median']:.3f}"
                             f" off_med={aux_stats['offset_ref_norm_median']:.3f}"
                             f" render_nonblack={aux_stats['render_nonblack']:.3f}"
