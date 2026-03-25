@@ -366,6 +366,7 @@ def train_re10k(config: ExperimentConfig):
     latest_ckpt_path = os.path.join(save_dir, "model_latest.pth")
     best_ckpt_path = os.path.join(save_dir, "model_best.pth")
     csv_log_path = os.path.join(save_dir, "train_log.csv")
+    diag_csv_path = os.path.join(save_dir, "diag_log.csv")
 
 ##############################
 # Pre Load
@@ -405,6 +406,33 @@ def train_re10k(config: ExperimentConfig):
                 "num_steps",
                 "best_metric",
                 "saved_as_best"
+            ])
+
+    if not os.path.exists(diag_csv_path):
+        with open(diag_csv_path, "w", newline="") as f:
+            csv_writer = csv.writer(f)
+            csv_writer.writerow([
+                "global_step",
+                "epoch",
+                "scene_index",
+                "scene_name",
+                "target_id",
+                "input_ids",
+                "loss_total",
+                "loss_l1",
+                "loss_ssim",
+                "loss_smooth",
+                "psnr",
+                "opacity_mean",
+                "color_mean",
+                "pose_as_is_z02",
+                "pose_as_is_safe_frame",
+                "pose_as_is_z_median",
+                "pose_inv_z02",
+                "pose_inv_safe_frame",
+                "pose_inv_z_median",
+                "render_mean",
+                "render_nonblack",
             ])
 
     print("start training...\n")
@@ -466,6 +494,32 @@ def train_re10k(config: ExperimentConfig):
                     psnr_count += 1
                 else:
                     psnr_val = None
+
+                with open(diag_csv_path, "a", newline="") as f:
+                    csv_writer = csv.writer(f)
+                    csv_writer.writerow([
+                        global_step,
+                        ep + 1,
+                        i,
+                        meta["scene_name"],
+                        meta["target_id"],
+                        json.dumps(meta["input_ids"]),
+                        float(stats["loss_total"]),
+                        float(stats["loss_l1"]),
+                        float(stats["loss_ssim"]),
+                        float(stats["loss_smooth"]),
+                        "" if psnr_val is None else float(psnr_val),
+                        float(aux_stats["opacity_mean"]),
+                        float(aux_stats["color_mean"]),
+                        "" if "pose_as_is_z02" not in aux_stats else float(aux_stats["pose_as_is_z02"]),
+                        "" if "pose_as_is_safe_frame" not in aux_stats else float(aux_stats["pose_as_is_safe_frame"]),
+                        "" if "pose_as_is_z_median" not in aux_stats else float(aux_stats["pose_as_is_z_median"]),
+                        "" if "pose_inv_z02" not in aux_stats else float(aux_stats["pose_inv_z02"]),
+                        "" if "pose_inv_safe_frame" not in aux_stats else float(aux_stats["pose_inv_safe_frame"]),
+                        "" if "pose_inv_z_median" not in aux_stats else float(aux_stats["pose_inv_z_median"]),
+                        "" if "render_mean_diag" not in aux_stats else float(aux_stats["render_mean_diag"]),
+                        "" if "render_nonblack" not in aux_stats else float(aux_stats["render_nonblack"]),
+                    ])
 
                 if (
                     tb_writer is not None
