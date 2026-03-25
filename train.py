@@ -78,6 +78,107 @@ def _normalize_depth_for_tb(depth: torch.Tensor) -> torch.Tensor:
     return (depth - depth_min) / denom
 
 
+def _summarize_1d(values: torch.Tensor):
+    values = values.reshape(-1)
+    if values.numel() == 0:
+        return {
+            "count": 0,
+            "mean": float("nan"),
+            "std": float("nan"),
+            "min": float("nan"),
+            "p05": float("nan"),
+            "median": float("nan"),
+            "p95": float("nan"),
+            "max": float("nan"),
+        }
+
+    values = values.float()
+    return {
+        "count": int(values.numel()),
+        "mean": float(values.mean().item()),
+        "std": float(values.std(unbiased=False).item()),
+        "min": float(values.min().item()),
+        "p05": float(torch.quantile(values, 0.05).item()),
+        "median": float(torch.quantile(values, 0.5).item()),
+        "p95": float(torch.quantile(values, 0.95).item()),
+        "max": float(values.max().item()),
+    }
+
+
+def _prefix_dict(prefix: str, stats: dict):
+    return {f"{prefix}_{k}": v for k, v in stats.items()}
+
+
+def _point_cloud_bounds(points: torch.Tensor):
+    if points.numel() == 0:
+        return {
+            "x_min": float("nan"),
+            "x_max": float("nan"),
+            "x_span": float("nan"),
+            "y_min": float("nan"),
+            "y_max": float("nan"),
+            "y_span": float("nan"),
+            "z_min": float("nan"),
+            "z_max": float("nan"),
+            "z_span": float("nan"),
+        }
+
+    mins = points.min(dim=0).values
+    maxs = points.max(dim=0).values
+    spans = maxs - mins
+    return {
+        "x_min": float(mins[0].item()),
+        "x_max": float(maxs[0].item()),
+        "x_span": float(spans[0].item()),
+        "y_min": float(mins[1].item()),
+        "y_max": float(maxs[1].item()),
+        "y_span": float(spans[1].item()),
+        "z_min": float(mins[2].item()),
+        "z_max": float(maxs[2].item()),
+        "z_span": float(spans[2].item()),
+    }
+
+
+def _make_pixel_grid(H: int, W: int, device, dtype):
+    ys, xs = torch.meshgrid(
+        torch.arange(H, device=device, dtype=dtype),
+        torch.arange(W, device=device, dtype=dtype),
+        indexing="ij",
+    )
+    ones = torch.ones_like(xs)
+    return torch.stack([xs, ys, ones], dim=0)
+
+
+def _unproject_depth_single(depth: torch.Tensor, K: torch.Tensor) -> torch.Tensor:
+    H, W = depth.shape[-2:]
+    grid = _make_pixel_grid(H, W, depth.device, depth.dtype).reshape(3, -1)
+    Kinv = torch.inverse(K)
+    rays = Kinv @ grid
+    points = rays * depth.reshape(1, -1)
+    return points.t().contiguous()
+
+
+def _cam_to_world_points(points_cam: torch.Tensor, c2w: torch.Tensor) -> torch.Tensor:
+    ones = torch.ones(
+        points_cam.shape[0],
+        1,
+        device=points_cam.device,
+        dtype=points_cam.dtype,
+    )
+    points_h = torch.cat([points_cam, ones], dim=1)
+    return (c2w @ points_h.t()).t()[:, :3]
+
+
+def _summarize_image(image: torch.Tensor):
+    return {
+        "mean": float(image.mean().item()),
+        "std": float(image.std(unbiased=False).item()),
+        "min": float(image.min().item()),
+        "max": float(image.max().item()),
+        "nonblack": float((image > 1e-3).float().mean().item()),
+    }
+
+
 def _camera_space_points(points_world: torch.Tensor, pose_c2w: torch.Tensor) -> torch.Tensor:
     ones = torch.ones(
         points_world.shape[0],
@@ -129,34 +230,17 @@ def _camera_visibility_stats(
         & (v <= float(H - 1))
     )
 
-    def summarize(values: torch.Tensor):
-        if values.numel() == 0:
-            return {
-                "min": float("nan"),
-                "p05": float("nan"),
-                "median": float("nan"),
-                "p95": float("nan"),
-                "max": float("nan"),
-            }
-        return {
-            "min": float(values.min().item()),
-            "p05": float(torch.quantile(values, 0.05).item()),
-            "median": float(torch.quantile(values, 0.5).item()),
-            "p95": float(torch.quantile(values, 0.95).item()),
-            "max": float(values.max().item()),
-        }
-
     positive_z = z[positive_mask]
     positive_x = x[positive_mask]
     positive_y = y[positive_mask]
     positive_u = u[positive_mask]
     positive_v = v[positive_mask]
 
-    z_summary = summarize(positive_z)
-    x_summary = summarize(positive_x)
-    y_summary = summarize(positive_y)
-    u_summary = summarize(positive_u)
-    v_summary = summarize(positive_v)
+    z_summary = _summarize_1d(positive_z)
+    x_summary = _summarize_1d(positive_x)
+    y_summary = _summarize_1d(positive_y)
+    u_summary = _summarize_1d(positive_u)
+    v_summary = _summarize_1d(positive_v)
 
     return {
         "frac_z_gt_0": float(positive_mask.float().mean().item()),
@@ -284,20 +368,65 @@ def train_one_step(
         if b == 0:
             pose_as_is = target_pose[b].float()
             pose_inverted = torch.inverse(pose_as_is)
+            ref_pose = input_poses[b, 0].float()
+            ref_K = input_Ks[b, 0].float()
+            target_K_b = target_K[b].float()
+            depth_b = depth[0, 0].float()
+
+            raw_ref_cam_full = _unproject_depth_single(depth_b, ref_K)
+            raw_ref_cam_emit = (
+                depth_b[::emit_stride, ::emit_stride].reshape(-1)
+            )
+            raw_ref_cam_emit_points = _unproject_depth_single(
+                depth_b[::emit_stride, ::emit_stride].unsqueeze(0),
+                torch.tensor(
+                    [
+                        [ref_K[0, 0] / emit_stride, 0.0, ref_K[0, 2] / emit_stride],
+                        [0.0, ref_K[1, 1] / emit_stride, ref_K[1, 2] / emit_stride],
+                        [0.0, 0.0, 1.0],
+                    ],
+                    device=ref_K.device,
+                    dtype=ref_K.dtype,
+                ),
+            )
+            raw_ref_world_emit = _cam_to_world_points(raw_ref_cam_emit_points, ref_pose)
+            means_ref_cam = _camera_space_points(means3D, ref_pose)
+            offset_ref_cam = means_ref_cam - raw_ref_cam_emit_points
+            offset_ref_norm = torch.norm(offset_ref_cam, dim=1)
+
             stats_as_is = _camera_visibility_stats(
                 means3D,
                 pose_as_is,
-                target_K[b],
+                target_K_b,
                 H_full,
                 W_full,
             )
             stats_inverted = _camera_visibility_stats(
                 means3D,
                 pose_inverted,
-                target_K[b],
+                target_K_b,
                 H_full,
                 W_full,
             )
+            raw_stats_as_is = _camera_visibility_stats(
+                raw_ref_world_emit,
+                pose_as_is,
+                target_K_b,
+                H_full,
+                W_full,
+            )
+            raw_stats_inverted = _camera_visibility_stats(
+                raw_ref_world_emit,
+                pose_inverted,
+                target_K_b,
+                H_full,
+                W_full,
+            )
+
+            ref_center = ref_pose[:3, 3]
+            target_center = pose_as_is[:3, 3]
+            baseline = torch.norm(target_center - ref_center, p=2)
+
             diag_stats = {
                 "pose_as_is_z02": stats_as_is["frac_z_gt_02"],
                 "pose_as_is_safe_frame": stats_as_is["frac_safe_in_frame"],
@@ -317,9 +446,46 @@ def train_one_step(
                 "pose_inv_z02": stats_inverted["frac_z_gt_02"],
                 "pose_inv_safe_frame": stats_inverted["frac_safe_in_frame"],
                 "pose_inv_z_median": stats_inverted["z_median_pos"],
+                "raw_pose_as_is_z02": raw_stats_as_is["frac_z_gt_02"],
+                "raw_pose_as_is_safe_frame": raw_stats_as_is["frac_safe_in_frame"],
+                "raw_pose_as_is_u_p05": raw_stats_as_is["u_p05_pos"],
+                "raw_pose_as_is_u_p95": raw_stats_as_is["u_p95_pos"],
+                "raw_pose_as_is_v_p05": raw_stats_as_is["v_p05_pos"],
+                "raw_pose_as_is_v_p95": raw_stats_as_is["v_p95_pos"],
+                "raw_pose_inv_z02": raw_stats_inverted["frac_z_gt_02"],
+                "raw_pose_inv_safe_frame": raw_stats_inverted["frac_safe_in_frame"],
+                "depth_emit_count": int(depth_b[::emit_stride, ::emit_stride].numel()),
+                "baseline_ref_target": float(baseline.item()),
+                "ref_fx": float(ref_K[0, 0].item()),
+                "ref_fy": float(ref_K[1, 1].item()),
+                "ref_cx": float(ref_K[0, 2].item()),
+                "ref_cy": float(ref_K[1, 2].item()),
+                "target_fx": float(target_K_b[0, 0].item()),
+                "target_fy": float(target_K_b[1, 1].item()),
+                "target_cx": float(target_K_b[0, 2].item()),
+                "target_cy": float(target_K_b[1, 2].item()),
                 "render_mean_diag": float(rendered.mean().item()),
                 "render_nonblack": float((rendered > 1e-3).float().mean().item()),
             }
+            diag_stats.update(_prefix_dict("depth_full", _summarize_1d(depth_b)))
+            diag_stats.update(_prefix_dict("opacity", _summarize_1d(opacities.squeeze(-1))))
+            diag_stats.update(_prefix_dict("scale_x", _summarize_1d(scales[:, 0])))
+            diag_stats.update(_prefix_dict("scale_y", _summarize_1d(scales[:, 1])))
+            diag_stats.update(_prefix_dict("scale_z", _summarize_1d(scales[:, 2])))
+            diag_stats.update(_prefix_dict("raw_ref_x", _summarize_1d(raw_ref_cam_emit_points[:, 0])))
+            diag_stats.update(_prefix_dict("raw_ref_y", _summarize_1d(raw_ref_cam_emit_points[:, 1])))
+            diag_stats.update(_prefix_dict("raw_ref_z", _summarize_1d(raw_ref_cam_emit_points[:, 2])))
+            diag_stats.update(_prefix_dict("means_ref_x", _summarize_1d(means_ref_cam[:, 0])))
+            diag_stats.update(_prefix_dict("means_ref_y", _summarize_1d(means_ref_cam[:, 1])))
+            diag_stats.update(_prefix_dict("means_ref_z", _summarize_1d(means_ref_cam[:, 2])))
+            diag_stats.update(_prefix_dict("offset_ref_dx", _summarize_1d(offset_ref_cam[:, 0])))
+            diag_stats.update(_prefix_dict("offset_ref_dy", _summarize_1d(offset_ref_cam[:, 1])))
+            diag_stats.update(_prefix_dict("offset_ref_dz", _summarize_1d(offset_ref_cam[:, 2])))
+            diag_stats.update(_prefix_dict("offset_ref_norm", _summarize_1d(offset_ref_norm)))
+            diag_stats.update(_prefix_dict("means_world_bounds", _point_cloud_bounds(means3D)))
+            diag_stats.update(_prefix_dict("raw_world_bounds", _point_cloud_bounds(raw_ref_world_emit)))
+            diag_stats.update(_prefix_dict("render_img", _summarize_image(rendered)))
+            diag_stats.update(_prefix_dict("target_img", _summarize_image(target_img[b:b+1])))
 
     rendered = torch.cat(rendered_list, dim=0)
 
@@ -414,6 +580,7 @@ def train_re10k(config: ExperimentConfig):
     best_ckpt_path = os.path.join(save_dir, "model_best.pth")
     csv_log_path = os.path.join(save_dir, "train_log.csv")
     diag_csv_path = os.path.join(save_dir, "diag_log.csv")
+    diag_jsonl_path = os.path.join(save_dir, "diag_log_full.jsonl")
 
 ##############################
 # Pre Load
@@ -592,6 +759,23 @@ def train_re10k(config: ExperimentConfig):
                         "" if "render_nonblack" not in aux_stats else float(aux_stats["render_nonblack"]),
                     ])
 
+                diag_record = {
+                    "global_step": int(global_step),
+                    "epoch": int(ep + 1),
+                    "scene_index": int(i),
+                    "scene_name": meta["scene_name"],
+                    "target_id": int(meta["target_id"]),
+                    "input_ids": [int(x) for x in meta["input_ids"]],
+                    "loss_total": float(stats["loss_total"]),
+                    "loss_l1": float(stats["loss_l1"]),
+                    "loss_ssim": float(stats["loss_ssim"]),
+                    "loss_smooth": float(stats["loss_smooth"]),
+                    "psnr": None if psnr_val is None else float(psnr_val),
+                    "diag": aux_stats,
+                }
+                with open(diag_jsonl_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(diag_record) + "\n")
+
                 if (
                     tb_writer is not None
                     and global_step % config.training.tensorboard_every_n_steps == 0
@@ -629,10 +813,15 @@ def train_re10k(config: ExperimentConfig):
                         msg += (
                             f" | diag as_is(z>0.2={aux_stats['pose_as_is_z02']:.3f},"
                             f" frame={aux_stats['pose_as_is_safe_frame']:.3f})"
+                            f" raw(frame={aux_stats['raw_pose_as_is_safe_frame']:.3f})"
                             f" inv(z>0.2={aux_stats['pose_inv_z02']:.3f},"
                             f" frame={aux_stats['pose_inv_safe_frame']:.3f})"
                             f" uv95=({aux_stats['pose_as_is_u_p05']:.1f},{aux_stats['pose_as_is_u_p95']:.1f};"
                             f"{aux_stats['pose_as_is_v_p05']:.1f},{aux_stats['pose_as_is_v_p95']:.1f})"
+                            f" raw_uv95=({aux_stats['raw_pose_as_is_u_p05']:.1f},{aux_stats['raw_pose_as_is_u_p95']:.1f};"
+                            f"{aux_stats['raw_pose_as_is_v_p05']:.1f},{aux_stats['raw_pose_as_is_v_p95']:.1f})"
+                            f" depth_med={aux_stats['depth_full_median']:.3f}"
+                            f" off_med={aux_stats['offset_ref_norm_median']:.3f}"
                             f" render_nonblack={aux_stats['render_nonblack']:.3f}"
                         )
                     print(msg)
