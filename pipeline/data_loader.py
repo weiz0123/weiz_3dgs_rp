@@ -30,7 +30,10 @@ class RealEstate10KDataset(Dataset):
         frames_path = scene_path / "frames"
         metadata_path = scene_path / "metadata.txt"
 
-        images = sorted(frames_path.glob("*.jpg"))
+        images = sorted(
+            frames_path.glob("*.jpg"),
+            key=lambda p: int(p.stem) if p.stem.isdigit() else p.name,
+        )
 
         if not metadata_path.exists():
             # skip broken scene
@@ -39,14 +42,7 @@ class RealEstate10KDataset(Dataset):
         with open(metadata_path) as f:
             lines = f.readlines()[1:]  # skip header
 
-        # -------------------------------------------------
-        # IMPORTANT FIX:
-        # metadata lines and images may not match
-        # -------------------------------------------------
-
-        n = min(len(lines), len(images))
-
-        if n == 0:
+        if len(lines) == 0 or len(images) == 0:
             # skip invalid scene
             return self.__getitem__(random.randint(0, len(self.scenes)-1))
 
@@ -55,19 +51,19 @@ class RealEstate10KDataset(Dataset):
         poses = []
         timestamps = []
 
-        for i in range(n):
+        for image_path in images:
+            stem = image_path.stem
+            if not stem.isdigit():
+                continue
 
-            line = lines[i]
+            meta_idx = int(stem)
+            if meta_idx < 0 or meta_idx >= len(lines):
+                continue
+
+            line = lines[meta_idx]
             vals = line.split()
 
             try:
-
-                # -------------------
-                # timestamp
-                # -------------------
-                timestamp = float(vals[0])
-                timestamps.append(timestamp)
-
                 # -------------------
                 # intrinsics
                 # -------------------
@@ -95,7 +91,7 @@ class RealEstate10KDataset(Dataset):
                 # -------------------
                 # image
                 # -------------------
-                img = cv2.imread(str(images[i]))
+                img = cv2.imread(str(image_path))
 
                 if img is None:
                     # corrupted image
@@ -106,7 +102,13 @@ class RealEstate10KDataset(Dataset):
                 if self.transform:
                     img = self.transform(img)
 
+                # -------------------
+                # timestamp
+                # -------------------
+                timestamp = float(vals[0])
+
                 imgs.append(img)
+                timestamps.append(timestamp)
                 intrinsics.append(K)
                 poses.append(pose)
 
