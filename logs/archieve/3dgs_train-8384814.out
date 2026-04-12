@@ -1,0 +1,40 @@
+====================================
+Job started on rg32002
+Start time: Sat 14 Mar 2026 08:06:13 PM EDT
+Working dir: /home/weiz/links/scratch/weiz_3dgs_rp
+====================================
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) arrow/18.1.0     2) opencv/4.10.0
+
+GPU info:
+Sat Mar 14 20:06:14 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 570.211.01             Driver Version: 570.211.01     CUDA Version: 12.8     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA H100 80GB HBM3          Off |   00000000:5F:00.0 Off |                    0 |
+| N/A   44C    P0             73W /  700W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+====================================
+Starting training...
+====================================
+start...
+
+loading datasets...
+
+loading model...
+
+slurmstepd: error: *** JOB 8384814 ON rg32002 CANCELLED AT 2026-03-15T00:09:45 ***

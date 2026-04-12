@@ -1,0 +1,34 @@
+====================================
+Job started on rg21701
+Start time: Mon 16 Mar 2026 08:23:04 PM EDT
+Working dir: /home/weiz/links/scratch/weiz_3dgs_rp
+====================================
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) arrow/18.1.0     2) opencv/4.10.0
+
+GPU info:
+Mon Mar 16 20:23:06 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 570.211.01             Driver Version: 570.211.01     CUDA Version: 12.8     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA H100 80GB HBM3          Off |   00000000:CB:00.0 Off |                    0 |
+| N/A   43C    P0             71W /  700W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+====================================
+Starting training...
+====================================
+slurmstepd: error: *** JOB 8454274 ON rg21701 CANCELLED AT 2026-03-17T00:30:12 ***

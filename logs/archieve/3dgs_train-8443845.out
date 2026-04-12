@@ -1,0 +1,637 @@
+====================================
+Job started on rg31701
+Start time: Mon 16 Mar 2026 12:36:04 PM EDT
+Working dir: /home/weiz/links/scratch/weiz_3dgs_rp
+====================================
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) arrow/18.1.0     2) opencv/4.10.0
+
+GPU info:
+No devices were found
+====================================
+Starting training...
+====================================
+start...
+
+loading datasets...
+
+loading model...
+
+Loading weights:   0%|          | 0/223 [00:00<?, ?it/s]Loading weights:   0%|          | 1/223 [00:00<00:29,  7.61it/s]Loading weights: 100%|██████████| 223/223 [00:00<00:00, 1307.31it/s]
+init training...
+
+start training...
+
+Epoch 1:   0%|          | 0/929 [00:00<?, ?it/s]/lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/utils/data/dataloader.py:1118: UserWarning: 'pin_memory' argument is set as true but no accelerator is found, then device pinned memory won't be used.
+  super().__init__(loader)
+Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 0 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   0%|          | 1/929 [01:46<27:20:29, 106.07s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 1 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   0%|          | 2/929 [02:28<17:43:10, 68.81s/it] Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 2 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   0%|          | 3/929 [03:14<15:01:17, 58.40s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 3 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   0%|          | 4/929 [04:01<13:49:40, 53.82s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 4 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   1%|          | 5/929 [04:47<13:06:43, 51.09s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 5 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   1%|          | 6/929 [05:32<12:33:22, 48.97s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 6 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   1%|          | 7/929 [06:18<12:18:05, 48.03s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 7 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   1%|          | 8/929 [07:00<11:46:52, 46.05s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 8 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   1%|          | 9/929 [07:46<11:43:37, 45.89s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 9 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   1%|          | 10/929 [08:32<11:44:16, 45.98s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 10 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   1%|          | 11/929 [09:14<11:26:06, 44.84s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 11 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   1%|▏         | 12/929 [09:57<11:15:35, 44.20s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 12 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   1%|▏         | 13/929 [10:39<11:06:56, 43.69s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 13 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   2%|▏         | 14/929 [11:25<11:17:20, 44.42s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 14 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   2%|▏         | 15/929 [12:09<11:10:28, 44.01s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 15 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   2%|▏         | 16/929 [12:55<11:19:35, 44.66s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 16 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   2%|▏         | 17/929 [13:40<11:23:45, 44.98s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 17 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   2%|▏         | 18/929 [14:25<11:20:28, 44.82s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 18 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   2%|▏         | 19/929 [15:10<11:19:51, 44.83s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 19 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   2%|▏         | 20/929 [15:55<11:21:25, 44.98s/it]Rasterizer failure: No CUDA GPUs are available
+Exception raised from device_count_ensure_non_zero at /tmp/build_wheels_tmp.5905/python-3.11/torch/c10/cuda/CUDAFunctions.cpp:130 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x97 (0x149966187f07 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x14996611d64d in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10.so)
+frame #2: c10::cuda::device_count_ensure_non_zero() + 0x63 (0x1499b05c9463 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libc10_cuda.so)
+frame #3: <unknown function> + 0xf57be0 (0x14996751dbe0 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0x35e4f4a (0x149969baaf4a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x35e4fdc (0x149969baafdc in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: at::_ops::empty_memory_format::redispatch(c10::DispatchKeySet, c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0xe6 (0x1499a19a7876 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x2ca4ee9 (0x1499a1e13ee9 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: at::_ops::empty_memory_format::call(c10::ArrayRef<c10::SymInt>, std::optional<c10::ScalarType>, std::optional<c10::Layout>, std::optional<c10::Device>, std::optional<bool>, std::optional<c10::MemoryFormat>) + 0x154 (0x1499a1a7b854 in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0xee (0x1498551546b3 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #10: torch::empty(c10::ArrayRef<long>, c10::TensorOptions, std::optional<c10::MemoryFormat>) + 0x86 (0x149855154ac9 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #11: RasterizeGaussiansCUDA(at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, at::Tensor const&, at::Tensor const&, at::Tensor const&, float, float, int, int, at::Tensor const&, int, at::Tensor const&, bool, bool) + 0x3eb (0x14985514b541 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #12: <unknown function> + 0xaa979 (0x149855149979 in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+frame #13: <unknown function> + 0xa6bfa (0x149855145bfa in /lustre10/scratch/weiz/weiz_3dgs_rp/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-311-x86_64-linux-gnu.so)
+<omitting python frames>
+frame #18: <unknown function> + 0x80a66a (0x1499ad98466a in /lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/lib/libtorch_python.so)
+frame #45: <unknown function> + 0x2394a (0x1499b244e94a in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+frame #46: __libc_start_main + 0x85 (0x1499b244ea05 in /cvmfs/soft.computecanada.ca/gentoo/2023/x86-64-v3/usr/lib64/libc.so.6)
+
+Skipping scene 20 : Rasterization failed
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 204, in train_re10k
+    stats, meta, rendered, target_out, depth, input_imgs = train_one_step(
+                                                           ^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 99, in train_one_step
+    raise RuntimeError("Rasterization failed")
+RuntimeError: Rasterization failed
+Epoch 1:   2%|▏         | 21/929 [16:41<11:23:43, 45.18s/it]slurmstepd: error: *** JOB 8443845 ON rg31701 CANCELLED AT 2026-03-16T17:09:52 ***

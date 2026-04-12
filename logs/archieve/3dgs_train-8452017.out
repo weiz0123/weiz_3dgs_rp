@@ -1,0 +1,46 @@
+====================================
+Job started on rg31602
+Start time: Mon 16 Mar 2026 06:46:19 PM EDT
+Working dir: /home/weiz/links/scratch/weiz_3dgs_rp
+====================================
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) arrow/18.1.0     2) opencv/4.10.0
+
+GPU info:
+Mon Mar 16 18:46:21 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 570.211.01             Driver Version: 570.211.01     CUDA Version: 12.8     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA H100 80GB HBM3          Off |   00000000:4E:00.0 Off |                    0 |
+| N/A   34C    P0             69W /  700W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+====================================
+Starting training...
+====================================
+start...
+
+loading datasets...
+
+loading model...
+
+Loading weights:   0%|          | 0/223 [00:00<?, ?it/s]Loading weights:   0%|          | 1/223 [00:00<00:38,  5.70it/s]Loading weights: 100%|██████████| 223/223 [00:00<00:00, 1235.13it/s]
+init training...
+
+Resuming from: outputs/re10k_debug/run_2/model_epoch_49.pth
+start training...
+
+Epoch 50:   0%|          | 0/929 [00:00<?, ?it/s]slurmstepd: error: *** JOB 8452017 ON rg31602 CANCELLED AT 2026-03-17T00:30:31 ***

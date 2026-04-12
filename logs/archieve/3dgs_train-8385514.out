@@ -1,0 +1,89 @@
+====================================
+Job started on rg31703
+Start time: Sat 14 Mar 2026 08:33:51 PM EDT
+Working dir: /home/weiz/links/scratch/weiz_3dgs_rp
+====================================
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) arrow/18.1.0     2) opencv/4.10.0
+
+GPU info:
+Sat Mar 14 20:33:52 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 570.211.01             Driver Version: 570.211.01     CUDA Version: 12.8     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA H100 80GB HBM3          Off |   00000000:CB:00.0 Off |                    0 |
+| N/A   32C    P0             68W /  700W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+====================================
+Starting training...
+====================================
+start...
+
+loading datasets...
+
+loading model...
+
+Loading weights:   0%|          | 0/223 [00:00<?, ?it/s]Loading weights:   3%|▎         | 6/223 [00:00<00:03, 56.92it/s]Loading weights: 100%|██████████| 223/223 [00:00<00:00, 1545.13it/s]
+init training...
+
+start training...
+
+Epoch 1:   0%|          | 0/117 [00:00<?, ?it/s]Epoch 1:   0%|          | 0/117 [00:04<?, ?it/s]
+Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 266, in <module>
+    train_re10k(
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/train.py", line 197, in train_re10k
+    for i, scene_batch in enumerate(tqdm(loader, desc=f"Epoch {ep+1}")):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/tqdm/std.py", line 1181, in __iter__
+    for obj in iterable:
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/utils/data/dataloader.py", line 741, in __next__
+    data = self._next_data()
+           ^^^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/utils/data/dataloader.py", line 1548, in _next_data
+    return self._process_data(data, worker_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/utils/data/dataloader.py", line 1586, in _process_data
+    data.reraise()
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/_utils.py", line 775, in reraise
+    raise exception
+RuntimeError: Caught RuntimeError in DataLoader worker process 0.
+Original Traceback (most recent call last):
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/utils/data/_utils/worker.py", line 358, in _worker_loop
+    data = fetcher.fetch(index)  # type: ignore[possibly-undefined]
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/utils/data/_utils/fetch.py", line 57, in fetch
+    return self.collate_fn(data)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/utils/data/_utils/collate.py", line 401, in default_collate
+    return collate(batch, collate_fn_map=default_collate_fn_map)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/utils/data/_utils/collate.py", line 171, in collate
+    {
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/utils/data/_utils/collate.py", line 172, in <dictcomp>
+    key: collate(
+         ^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/utils/data/_utils/collate.py", line 155, in collate
+    return collate_fn_map[elem_type](batch, collate_fn_map=collate_fn_map)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/lustre10/scratch/weiz/weiz_3dgs_rp/weiz_3dgs/lib/python3.11/site-packages/torch/utils/data/_utils/collate.py", line 275, in collate_tensor_fn
+    return torch.stack(batch, 0, out=out)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: stack expects each tensor to be equal size, but got [30] at entry 0 and [101] at entry 1
+
+====================================
+Training finished at Sat 14 Mar 2026 08:36:55 PM EDT
+====================================

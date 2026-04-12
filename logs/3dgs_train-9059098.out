@@ -1,0 +1,48 @@
+====================================
+Job started on rg31702
+Start time: Wed 25 Mar 2026 03:07:18 AM EDT
+Working dir: /home/weiz/links/scratch/weiz_3dgs_rp
+====================================
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) arrow/18.1.0     2) opencv/4.10.0
+
+GPU info:
+Wed Mar 25 03:07:19 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 570.211.01             Driver Version: 570.211.01     CUDA Version: 12.8     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA H100 80GB HBM3          Off |   00000000:DB:00.0 Off |                    0 |
+| N/A   46C    P0             76W /  700W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+====================================
+Starting training...
+====================================
+start...
+
+training model version: mvv3
+loading datasets...
+
+loading model...
+
+Loading weights:   0%|          | 0/223 [00:00<?, ?it/s]Loading weights:   1%|          | 2/223 [00:00<00:20, 10.65it/s]Loading weights:   2%|▏         | 5/223 [00:00<00:23,  9.25it/s]Loading weights:   4%|▍         | 9/223 [00:00<00:16, 12.63it/s]Loading weights:   5%|▍         | 11/223 [00:00<00:18, 11.77it/s]Loading weights:   6%|▌         | 13/223 [00:01<00:21,  9.95it/s]Loading weights:   7%|▋         | 15/223 [00:01<00:21,  9.70it/s]Loading weights:   7%|▋         | 16/223 [00:01<00:22,  9.29it/s]Loading weights:   8%|▊         | 18/223 [00:01<00:19, 10.26it/s]Loading weights:   9%|▉         | 20/223 [00:02<00:22,  9.01it/s]Loading weights:  10%|█         | 23/223 [00:02<00:17, 11.38it/s]Loading weights:  11%|█         | 25/223 [00:02<00:15, 12.72it/s]Loading weights:  12%|█▏        | 27/223 [00:02<00:17, 11.23it/s]Loading weights:  17%|█▋        | 37/223 [00:02<00:09, 19.80it/s]Loading weights:  18%|█▊        | 41/223 [00:03<00:10, 18.06it/s]Loading weights:  19%|█▉        | 43/223 [00:03<00:14, 12.58it/s]Loading weights:  20%|██        | 45/223 [00:03<00:17, 10.29it/s]Loading weights:  21%|██        | 47/223 [00:04<00:18,  9.70it/s]Loading weights:  23%|██▎       | 51/223 [00:04<00:12, 13.25it/s]Loading weights:  24%|██▍       | 53/223 [00:04<00:13, 12.44it/s]Loading weights:  25%|██▍       | 55/223 [00:04<00:15, 11.04it/s]Loading weights:  26%|██▌       | 57/223 [00:04<00:13, 12.09it/s]Loading weights:  26%|██▋       | 59/223 [00:05<00:17,  9.19it/s]Loading weights:  27%|██▋       | 61/223 [00:05<00:17,  9.27it/s]Loading weights:  28%|██▊       | 63/223 [00:05<00:18,  8.68it/s]Loading weights:  29%|██▉       | 65/223 [00:05<00:18,  8.70it/s]Loading weights:  30%|██▉       | 66/223 [00:05<00:17,  8.72it/s]Loading weights:  31%|███       | 69/223 [00:06<00:21,  7.13it/s]Loading weights:  31%|███▏      | 70/223 [00:06<00:21,  7.03it/s]Loading weights:  32%|███▏      | 71/223 [00:06<00:23,  6.44it/s]Loading weights:  39%|███▉      | 88/223 [00:06<00:04, 30.04it/s]Loading weights:  42%|████▏     | 93/223 [00:07<00:07, 17.18it/s]Loading weights:  43%|████▎     | 97/223 [00:08<00:09, 12.92it/s]Loading weights:  45%|████▍     | 100/223 [00:08<00:09, 12.74it/s]Loading weights:  47%|████▋     | 104/223 [00:08<00:07, 15.60it/s]Loading weights:  48%|████▊     | 107/223 [00:08<00:08, 13.55it/s]Loading weights:  49%|████▉     | 110/223 [00:09<00:11,  9.93it/s]Loading weights:  50%|█████     | 112/223 [00:09<00:10, 10.32it/s]Loading weights:  51%|█████     | 114/223 [00:09<00:10, 10.76it/s]Loading weights:  52%|█████▏    | 116/223 [00:10<00:11,  9.20it/s]Loading weights:  53%|█████▎    | 118/223 [00:10<00:11,  8.86it/s]Loading weights:  54%|█████▍    | 120/223 [00:10<00:13,  7.54it/s]Loading weights:  56%|█████▌    | 125/223 [00:10<00:08, 11.33it/s]Loading weights:  57%|█████▋    | 128/223 [00:11<00:07, 13.46it/s]Loading weights:  58%|█████▊    | 130/223 [00:11<00:07, 11.99it/s]Loading weights:  59%|█████▉    | 132/223 [00:11<00:08, 10.93it/s]Loading weights:  63%|██████▎   | 141/223 [00:11<00:04, 19.71it/s]Loading weights:  65%|██████▍   | 144/223 [00:11<00:04, 16.65it/s]Loading weights:  65%|██████▌   | 146/223 [00:12<00:05, 14.98it/s]Loading weights:  66%|██████▋   | 148/223 [00:12<00:05, 14.84it/s]Loading weights:  68%|██████▊   | 152/223 [00:12<00:04, 15.57it/s]Loading weights:  69%|██████▉   | 154/223 [00:12<00:05, 13.78it/s]Loading weights:  70%|██████▉   | 156/223 [00:13<00:05, 11.43it/s]Loading weights:  71%|███████   | 158/223 [00:13<00:05, 11.62it/s]Loading weights:  73%|███████▎  | 162/223 [00:13<00:04, 13.49it/s]Loading weights:  74%|███████▍  | 165/223 [00:13<00:04, 14.35it/s]Loading weights:  75%|███████▍  | 167/223 [00:13<00:03, 15.21it/s]Loading weights:  76%|███████▌  | 169/223 [00:13<00:03, 13.99it/s]Loading weights:  77%|███████▋  | 171/223 [00:14<00:04, 12.09it/s]Loading weights:  79%|███████▉  | 176/223 [00:14<00:02, 16.93it/s]Loading weights:  87%|████████▋ | 195/223 [00:14<00:00, 38.08it/s]Loading weights:  89%|████████▉ | 199/223 [00:14<00:00, 36.19it/s]Loading weights:  91%|█████████ | 203/223 [00:15<00:00, 24.91it/s]Loading weights:  92%|█████████▏| 206/223 [00:15<00:00, 17.73it/s]Loading weights:  96%|█████████▋| 215/223 [00:15<00:00, 25.56it/s]Loading weights:  98%|█████████▊| 219/223 [00:15<00:00, 25.05it/s]Loading weights: 100%|██████████| 223/223 [00:15<00:00, 14.14it/s]
+init training...
+
+Resuming from: outputs/re10k_debug/run_2/model_latest.pth
+start training...
+
+Epoch 4:   0%|          | 0/929 [00:00<?, ?it/s][Epoch 4 | Scene 0] be414fc8a382334d | inputs=[76, 0, 114, 123, 128, 129, 130, 131, 132, 133] target=67 | loss=0.3292 l1=0.2446 ssim=0.4202 smooth=0.0099 psnr=9.9550
+Epoch 4:   0%|          | 1/929 [10:08<156:54:53, 608.72s/it]slurmstepd: error: *** JOB 9059098 ON rg31702 CANCELLED AT 2026-03-25T07:42:35 ***
