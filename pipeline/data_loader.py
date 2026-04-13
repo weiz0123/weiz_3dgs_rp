@@ -5,6 +5,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import random
+from tqdm import tqdm
 
 '''
 Dataset Loader
@@ -38,7 +39,7 @@ class RealEstate10KDataset(Dataset):
         kept_scenes = []
         skipped_scenes = []
 
-        for scene_path in scene_paths:
+        for scene_path in tqdm(scene_paths, desc="filter_re10k_scenes", leave=False):
             frames_path = scene_path / "frames"
             metadata_path = scene_path / "metadata.txt"
 
@@ -60,7 +61,7 @@ class RealEstate10KDataset(Dataset):
 
             valid_frame_count = 0
 
-            for image_path in images:
+            for image_path in tqdm(images, desc=f"scan_frames:{scene_path.name}", leave=False):
                 stem = image_path.stem
                 if not stem.isdigit():
                     continue
@@ -194,7 +195,12 @@ class RealEstate10KDataset(Dataset):
             }
         ]
 
-        for local_idx, frame_idx in enumerate(training_data["train_indices"]):
+        for local_idx, frame_idx in tqdm(
+            enumerate(training_data["train_indices"]),
+            total=len(training_data["train_indices"]),
+            desc="build_visual_frames",
+            leave=False,
+        ):
             frames.append(
                 {
                     "label": f"train idx={frame_idx}",
@@ -217,7 +223,12 @@ class RealEstate10KDataset(Dataset):
         if num_rows == 1:
             axes = np.array([axes])
 
-        for row_idx, frame in enumerate(frames):
+        for row_idx, frame in tqdm(
+            enumerate(frames),
+            total=len(frames),
+            desc="draw_visual_frames",
+            leave=False,
+        ):
             image_ax = axes[row_idx, 0]
             intrinsics_ax = axes[row_idx, 1]
             pose_ax = axes[row_idx, 2]
@@ -298,7 +309,7 @@ class RealEstate10KDataset(Dataset):
         poses = []
         timestamps = []
 
-        for image_path in images:
+        for image_path in tqdm(images, desc=f"load_scene:{scene_name}", leave=False):
             stem = image_path.stem
             if not stem.isdigit():
                 continue

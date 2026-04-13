@@ -16,17 +16,34 @@ def _to_image_numpy(image_tensor):
     return image.numpy().clip(0.0, 1.0)
 
 
-def _to_feature_numpy(feature_tensor):
+def _to_dino_pca_numpy(feature_tensor):
     feature = feature_tensor.detach().cpu().float()
     if feature.ndim != 3:
         raise ValueError(f"Expected feature tensor [C, H, W], got {tuple(feature.shape)}")
-    feature = feature.mean(dim=0)
-    feature = feature.numpy()
-    feature = feature - feature.min()
-    denom = feature.max()
-    if denom > 0:
-        feature = feature / denom
-    return feature
+
+    channels, height, width = feature.shape
+    patch_tokens = feature.permute(1, 2, 0).reshape(height * width, channels)
+    patch_tokens = patch_tokens - patch_tokens.mean(dim=0, keepdim=True)
+
+    q = min(3, patch_tokens.shape[0], patch_tokens.shape[1])
+    if q == 0:
+        raise ValueError("Cannot run PCA on empty DINO feature tensor")
+
+    _, _, v = torch.pca_lowrank(patch_tokens, q=q)
+    pca_features = patch_tokens @ v[:, :q]
+
+    if q < 3:
+        padded = torch.zeros((pca_features.shape[0], 3), dtype=pca_features.dtype)
+        padded[:, :q] = pca_features
+        pca_features = padded
+
+    pca_features = pca_features.reshape(height, width, 3)
+    pca_features = pca_features - pca_features.amin(dim=(0, 1), keepdim=True)
+    denom = pca_features.amax(dim=(0, 1), keepdim=True)
+    denom = torch.where(denom > 0, denom, torch.ones_like(denom))
+    pca_features = pca_features / denom
+
+    return pca_features.numpy().clip(0.0, 1.0)
 
 
 def _to_depth_numpy(depth_tensor):
@@ -72,8 +89,8 @@ def visualize_model_outputs(training_data, features, depth, save_path=None):
         )
         image_ax.axis("off")
 
-        feature_ax.imshow(_to_feature_numpy(features[0, view_idx]), cmap="viridis")
-        feature_ax.set_title("dino feature mean", fontsize=10, loc="left")
+        feature_ax.imshow(_to_dino_pca_numpy(features[0, view_idx]))
+        feature_ax.set_title("dino pca rgb", fontsize=10, loc="left")
         feature_ax.axis("off")
 
         depth_ax.imshow(_to_depth_numpy(depth[0, view_idx]), cmap="plasma")
