@@ -108,6 +108,7 @@ def main():
     parser.add_argument('--num_workers', type=int, default=None, help='Override config dataloader num_workers')
     parser.add_argument('--pin_memory', type=int, choices=[0, 1], default=None, help='Override config dataloader pin_memory with 0/1')
     parser.add_argument('--save_every_n_epochs', type=int, default=None, help='Override config checkpoint save frequency')
+    parser.add_argument('--save_dir_name', type=str, default=None, help='Override the last folder name of config.training.save_dir')
     
     args = parser.parse_args()
 
@@ -124,6 +125,12 @@ def main():
         config.data.pin_memory = bool(args.pin_memory)
     if args.save_every_n_epochs is not None:
         config.training.save_every_n_epochs = args.save_every_n_epochs
+    if args.save_dir_name is not None:
+        base_save_parent = os.path.dirname(config.training.save_dir)
+        if base_save_parent == "":
+            config.training.save_dir = args.save_dir_name
+        else:
+            config.training.save_dir = os.path.join(base_save_parent, args.save_dir_name)
     device = resolve_device(config.training.device)
 
     
@@ -142,6 +149,7 @@ def main():
     print(f"Using num_workers: {config.data.num_workers}")
     print(f"Using pin_memory: {config.data.pin_memory}")
     print(f"Saving epoch checkpoints every {config.training.save_every_n_epochs} epochs")
+    print(f"Using save_dir: {config.training.save_dir}")
     
     # TODO: HERE we initilize the 
     if args.model_name == "v1_gs":
