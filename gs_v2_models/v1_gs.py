@@ -9,6 +9,7 @@ from configs.re10k_experiment import (
     _resolve_cache_root,
 )
 from .v1_dino_encoder import DinoV3DenseEncoder
+from vggt.utils.pose_enc import pose_encoding_to_extri_intri
 
 
 def _normalize_depth_tensor(x, batch_size, num_views):
@@ -169,9 +170,19 @@ class V1GSModel(nn.Module):
         vggt_grad_ctx = torch.no_grad() if self.config.model.freeze_vggt else nullcontext()
         with vggt_grad_ctx:
             tokens, ps_idx = self.vggt.aggregator(imgs_for_vggt)
+            pose_enc = self.vggt.camera_head(tokens)[-1]
+            extrinsic_all, intrinsic_all = pose_encoding_to_extri_intri(
+                pose_enc,
+                original_hw,
+            )
             depth_all, _ = self.vggt.depth_head(tokens, imgs_for_vggt, ps_idx)
 
         depth_all = _normalize_depth_tensor(depth_all, batch_size, num_view).float()
         depth_all = _crop_predictions_to_original(depth_all, original_hw)
 
-        return dino_features, depth_all
+        return {
+            "features": dino_features,
+            "depth": depth_all,
+            "estimated_extrinsics": extrinsic_all.float(),
+            "estimated_intrinsics": intrinsic_all.float(),
+        }

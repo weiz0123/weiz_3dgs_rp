@@ -61,12 +61,25 @@ def _to_depth_numpy(depth_tensor):
     return depth
 
 
-def visualize_model_outputs(training_data, features, depth, save_path=None):
+def _format_matrix_text(matrix_tensor):
+    matrix = matrix_tensor.detach().cpu().float().numpy()
+    return np.array2string(
+        matrix,
+        precision=4,
+        suppress_small=True,
+        max_line_width=120,
+    )
+
+
+def visualize_model_outputs(training_data, model_outputs, save_path=None):
+    features = model_outputs["features"]
+    depth = model_outputs["depth"]
+    estimated_extrinsics = model_outputs["estimated_extrinsics"]
     num_views = training_data["train_images"].shape[0]
     fig, axes = plt.subplots(
         num_views,
-        3,
-        figsize=(15, 3.5 * num_views),
+        4,
+        figsize=(21, 3.8 * num_views),
         constrained_layout=True,
     )
 
@@ -77,6 +90,7 @@ def visualize_model_outputs(training_data, features, depth, save_path=None):
         image_ax = axes[view_idx, 0]
         feature_ax = axes[view_idx, 1]
         depth_ax = axes[view_idx, 2]
+        pose_ax = axes[view_idx, 3]
 
         train_idx = training_data["train_indices"][view_idx]
         timestamp = float(training_data["train_timestamps"][view_idx])
@@ -96,6 +110,24 @@ def visualize_model_outputs(training_data, features, depth, save_path=None):
         depth_ax.imshow(_to_depth_numpy(depth[0, view_idx]), cmap="plasma")
         depth_ax.set_title("vggt depth", fontsize=10, loc="left")
         depth_ax.axis("off")
+
+        gt_c2w = training_data["train_poses"][view_idx]
+        gt_w2c = torch.linalg.inv(gt_c2w)
+        est_w2c = estimated_extrinsics[0, view_idx]
+        pose_ax.text(
+            0.01,
+            0.98,
+            "gt extrinsic (w2c):\n"
+            f"{_format_matrix_text(gt_w2c)}\n\n"
+            "estimated extrinsic (w2c):\n"
+            f"{_format_matrix_text(est_w2c)}",
+            va="top",
+            ha="left",
+            family="monospace",
+            fontsize=8.5,
+        )
+        pose_ax.set_title("camera pose", fontsize=10, loc="left")
+        pose_ax.axis("off")
 
     fig.suptitle(
         f"Scene: {training_data['scene']} | target idx={training_data['target_idx']}",
@@ -135,14 +167,14 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         inputs = training_data["train_images"].to(device)
 
         with torch.no_grad():
-            features, depth = model(inputs)
+            model_outputs = model(inputs)
 
         if not _HAS_VISUALIZED:
             save_path = None
             if output_dir is not None:
                 os.makedirs(output_dir, exist_ok=True)
                 save_path = os.path.join(output_dir, "train_features_depth_preview.png")
-            visualize_model_outputs(training_data, features, depth, save_path=save_path)
+            visualize_model_outputs(training_data, model_outputs, save_path=save_path)
             _HAS_VISUALIZED = True
 
         steps += 1
