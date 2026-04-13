@@ -1,7 +1,18 @@
 import os
 from dataclasses import dataclass, field
+'''
+re10k_experiment.py consists of:
+
+    1. ExperimentConfig that encapulates
+        a. DataConfig: All data-related settings (paths, batch size, num workers, etc.)
+        b. ModelConfig: All model-related settings (architecture choices, pretrained model paths, etc
+        c. TrainingConfig: All training-related settings (epochs, learning rate, logging, etc.)
+
+    2. get_default_config() function that returns an ExperimentConfig with all default settings filled
 
 
+'''
+# TODO: The following are all private method for env setup
 def _default_vggt_cache_dir():
     candidates = [
         os.environ.get("VGGT_CACHE_DIR"),
@@ -46,8 +57,8 @@ class DataConfig:
     num_workers: int = 2
     shuffle: bool = True
     pin_memory: bool = False
-    n_input_views: int = 10
-    min_input_views: int = 10
+    n_input_views: int = 8
+    min_input_views: int = 4
     input_view_sampling: str = "pose_sparse"
     num_target_views: int = 1
     target_mode: str = "middle"
@@ -81,13 +92,14 @@ class TrainingConfig:
     epochs: int = 400
     learning_rate: float = 1e-4
     weight_decay: float = 1e-4
+    save_every_n_epochs: int = 10
     emit_stride: int = 1
     max_scenes_per_epoch: int | None = 200
     save_dir: str = "outputs/re10k_debug"
     run_id: int = 2
     resume: bool = True
     resume_mode: str = "latest"
-    metric_every: int = 1
+    metric_every: int = 5
     save_best_by: str = "loss"
     log_every_n_steps: int = 10
     enable_tensorboard: bool = True
