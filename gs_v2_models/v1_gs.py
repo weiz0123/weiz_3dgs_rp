@@ -8,7 +8,7 @@ from configs.re10k_experiment import (
     _import_vggt_class,
     _resolve_cache_root,
 )
-from .v1_dino_encoder import DinoV2DenseEncoder
+from .v1_dino_encoder import DinoV3DenseEncoder
 
 
 def _normalize_depth_tensor(x, batch_size, num_views):
@@ -89,7 +89,7 @@ class V1GSModel(nn.Module):
         self.patch_h, self.patch_w = self._resolve_patch_size()
 
     def _build_dino_model(self):
-        dino = DinoV2DenseEncoder(
+        dino = DinoV3DenseEncoder(
             model_name=self.config.model.dino_name,
             freeze=self.config.model.freeze_dino,
         )
