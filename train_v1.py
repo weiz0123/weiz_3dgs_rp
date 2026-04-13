@@ -18,7 +18,7 @@ from configs.re10k_experiment import get_default_config
 from train_v1_epoch import train_epoch
 
 # models
-from gs_v2_models.v1_vggt_gs import BasicMLP
+from gs_v2_models.v1_gs import V1GSModel
 from pipeline.data_loader import RealEstate10KDataset
 
 def resolve_device(device_name: str) -> str:
@@ -143,12 +143,14 @@ def main():
     print(f"Using pin_memory: {config.data.pin_memory}")
     print(f"Saving epoch checkpoints every {config.training.save_every_n_epochs} epochs")
     
-    # TODO: HERE we initilize the model
-    model = BasicMLP(
-        input_size=config.data.n_input_views,
-        hidden_size=32,
-        output_size=2,
-    ).to(device)
+    # TODO: HERE we initilize the 
+    if args.model_name == "v1_gs":
+        model = V1GSModel(
+            num_view=config.data.n_input_views,
+            config=config
+        ).to(device)
+    else:
+        raise ValueError(f"Model name '{args.model_name}' not recognized. Please choose a valid model_name argument.")
 
     optimizer = torch.optim.AdamW(
         model.parameters(),
