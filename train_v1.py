@@ -232,6 +232,7 @@ def main():
             optimizer=optimizer,
             device=device,
             config=config,
+            output_dir=save_dir,
         )
 
         current_lr = optimizer.param_groups[0]["lr"]

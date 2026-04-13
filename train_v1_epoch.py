@@ -1,3 +1,5 @@
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -42,7 +44,7 @@ def _to_depth_numpy(depth_tensor):
     return depth
 
 
-def visualize_model_outputs(training_data, features, depth):
+def visualize_model_outputs(training_data, features, depth, save_path=None):
     num_views = training_data["train_images"].shape[0]
     fig, axes = plt.subplots(
         num_views,
@@ -82,10 +84,14 @@ def visualize_model_outputs(training_data, features, depth):
         f"Scene: {training_data['scene']} | target idx={training_data['target_idx']}",
         fontsize=14,
     )
-    plt.show()
+    if save_path is not None:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+    else:
+        plt.show()
 
 
-def train_epoch(model, data_manager, dataloader, optimizer, device, config=None):
+def train_epoch(model, data_manager, dataloader, optimizer, device, config=None, output_dir=None):
     global _HAS_VISUALIZED
 
     model.eval()
@@ -115,7 +121,11 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None)
             features, depth = model(inputs)
 
         if not _HAS_VISUALIZED:
-            visualize_model_outputs(training_data, features, depth)
+            save_path = None
+            if output_dir is not None:
+                os.makedirs(output_dir, exist_ok=True)
+                save_path = os.path.join(output_dir, "train_features_depth_preview.png")
+            visualize_model_outputs(training_data, features, depth, save_path=save_path)
             _HAS_VISUALIZED = True
 
         steps += 1
