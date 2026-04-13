@@ -196,7 +196,7 @@ class DataConfig:
 @dataclass
 class ModelConfig:
     model_version: str = "v(-1)_gs"
-    dino_name: str = "facebook/dinov3-vit7b16-pretrain-lvd1689m"
+    dino_name: str = "facebook/dinov2-large"
     freeze_dino: bool = True
     freeze_vggt: bool = True
     num_depth_bins: int = 48
