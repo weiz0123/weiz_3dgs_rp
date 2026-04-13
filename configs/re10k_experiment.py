@@ -1,4 +1,5 @@
 import os
+import sys
 from dataclasses import dataclass, field
 '''
 re10k_experiment.py consists of:
@@ -48,6 +49,133 @@ def _default_vggt_repo_path():
         if path and os.path.isdir(path):
             return path
     return None
+
+
+def _resolve_cache_root(explicit_cache_dir=None):
+    if explicit_cache_dir:
+        return explicit_cache_dir
+
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    parent_root = os.path.abspath(os.path.join(repo_root, ".."))
+    user = os.environ.get("USER") or os.environ.get("USERNAME")
+
+    candidates = [
+        "/home/weiz/links/scratch/huggingface",
+        os.path.join(parent_root, "huggingface"),
+        os.path.join(repo_root, "huggingface"),
+        "/scratch/huggingface",
+    ]
+
+    if user:
+        candidates.extend(
+            [
+                os.path.join("/home", user, "links", "scratch", "huggingface"),
+                os.path.join("/lustre10", "scratch", user, "huggingface"),
+                os.path.join("/scratch", user, "huggingface"),
+            ]
+        )
+
+    for candidate in candidates:
+        if os.name != "nt" and os.path.isdir(candidate):
+            return candidate
+    return None
+
+
+def _configure_cache_dirs(cache_root):
+    if not cache_root:
+        return None
+
+    os.makedirs(cache_root, exist_ok=True)
+    hub_dir = os.path.join(cache_root, "hub")
+    checkpoints_dir = os.path.join(cache_root, "vggt")
+    os.makedirs(hub_dir, exist_ok=True)
+    os.makedirs(checkpoints_dir, exist_ok=True)
+
+    os.environ["HF_HOME"] = cache_root
+    os.environ["HF_HUB_CACHE"] = hub_dir
+    os.environ["HUGGINGFACE_HUB_CACHE"] = hub_dir
+    os.environ["TRANSFORMERS_CACHE"] = hub_dir
+    os.environ["TORCH_HOME"] = cache_root
+
+    return checkpoints_dir
+
+
+def _maybe_add_repo_path(repo_path):
+    if repo_path and repo_path not in sys.path:
+        sys.path.insert(0, repo_path)
+
+
+def _candidate_vggt_repo_paths(explicit_repo_path=None):
+    candidates = []
+
+    if explicit_repo_path:
+        candidates.append(explicit_repo_path)
+
+    env_repo = os.environ.get("VGGT_REPO_PATH")
+    if env_repo:
+        candidates.append(env_repo)
+
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    parent_root = os.path.abspath(os.path.join(repo_root, ".."))
+    user = os.environ.get("USER") or os.environ.get("USERNAME")
+
+    candidates.extend(
+        [
+            os.path.join("/home", user, "links", "scratch", "vggt") if user else None,
+            os.path.join(repo_root, "vggt"),
+            os.path.join(repo_root, "external", "vggt"),
+            os.path.join(parent_root, "vggt"),
+            os.path.join(parent_root, "external", "vggt"),
+        ]
+    )
+
+    if user:
+        candidates.extend(
+            [
+                os.path.join("/home", user, "links", "scratch", "repos", "vggt"),
+                os.path.join("/lustre10", "scratch", user, "vggt"),
+                os.path.join("/lustre10", "scratch", user, "repos", "vggt"),
+                os.path.join("/scratch", user, "vggt"),
+            ]
+        )
+
+    seen = set()
+    ordered = []
+    for path in candidates:
+        if path and path not in seen:
+            seen.add(path)
+            ordered.append(path)
+    return ordered
+
+
+def _import_vggt_class(explicit_repo_path=None):
+    last_exc = None
+
+    try:
+        from vggt.models.vggt import VGGT
+
+        return VGGT, None
+    except ImportError as exc:
+        last_exc = exc
+
+    for candidate in _candidate_vggt_repo_paths(explicit_repo_path):
+        if not os.path.isdir(candidate):
+            continue
+        _maybe_add_repo_path(candidate)
+        try:
+            from vggt.models.vggt import VGGT
+
+            return VGGT, candidate
+        except ImportError as exc:
+            last_exc = exc
+
+    searched = "\n".join(f"  - {p}" for p in _candidate_vggt_repo_paths(explicit_repo_path))
+    raise ImportError(
+        "Official VGGT code could not be imported.\n"
+        "Provide the repo path via `config.model.vggt_repo_path` or set `VGGT_REPO_PATH`.\n"
+        "Searched:\n"
+        f"{searched}"
+    ) from last_exc
 
 
 @dataclass
