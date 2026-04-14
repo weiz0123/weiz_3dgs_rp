@@ -156,7 +156,7 @@ def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, targe
     rendered_image, radii = rasterizer(
         means3D = means3D,
         means2D = torch.zeros_like(means3D, device=device, requires_grad=True),
-        shs = shs.transpose(1, 2), # Now [N, 3, 16]
+        shs = shs,
         colors_precomp = None,
         opacities = opacity,
         scales = scales,
@@ -216,7 +216,7 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
             training_data["target_intrinsics"].unsqueeze(0).to(device),
             H=inputs.shape[-2],
             W=inputs.shape[-1],
-            sh_degree=2,
+            sh_degree=gaussian_head["sh_degree"],
         )
         estimated_extrinsics = model_outputs["estimated_extrinsics"]
         estimated_intrinsics = model_outputs["estimated_intrinsics"]
