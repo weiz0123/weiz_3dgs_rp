@@ -274,7 +274,10 @@ class V1GSModel(nn.Module):
         return {
             "guaussian_outputs": outputs,
             "features": dino_features,
+            "fused_map": fused_map,
             "depth": depth_all,
+            "depth_low": depth_low,
+            "conf_low": conf_low,
             "estimated_extrinsics": extrinsic_all.float(),
             "estimated_intrinsics": intrinsic_all.float(),
         }

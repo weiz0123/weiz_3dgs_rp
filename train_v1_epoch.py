@@ -169,7 +169,10 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
 
         gaussian_head = model_outputs["guaussian_outputs"]
         dino_feat  = model_outputs["features"]
+        fused_map = model_outputs["fused_map"]
         vggt_depth = model_outputs["depth"]
+        depth_low = model_outputs["depth_low"]
+        conf_low = model_outputs["conf_low"]
 
 
         estimated_image = render_scene(
@@ -214,7 +217,10 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
     steps = max(steps, 1)
     return {
         "dino_features": dino_feat.detach().cpu(),
+        "fused_map": fused_map.detach().cpu(),
         "vggt_depth": vggt_depth.detach().cpu(),
+        "depth_low": depth_low.detach().cpu(),
+        "conf_low": conf_low.detach().cpu(),
         "estimated_image": estimated_image.detach().cpu(),
         "estimated_extrinsics": estimated_extrinsics.detach().cpu(),
         "estimated_intrinsics": estimated_intrinsics.detach().cpu(),

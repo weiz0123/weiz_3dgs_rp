@@ -86,8 +86,8 @@ def _format_matrix_text(matrix_tensor):
 def visualize_epoch_outputs(stats, save_dir, epoch):
     fig, axes = plt.subplots(
         1,
-        6,
-        figsize=(30, 5),
+        9,
+        figsize=(45, 5),
         constrained_layout=True,
     )
 
@@ -107,8 +107,20 @@ def visualize_epoch_outputs(stats, save_dir, epoch):
     axes[3].set_title("vggt depth", fontsize=10, loc="left")
     axes[3].axis("off")
 
+    axes[4].imshow(_to_dino_pca_numpy(stats["fused_map"][0]))
+    axes[4].set_title("fused map", fontsize=10, loc="left")
+    axes[4].axis("off")
+
+    axes[5].imshow(_to_depth_numpy(stats["depth_low"][0]), cmap="plasma")
+    axes[5].set_title("depth low", fontsize=10, loc="left")
+    axes[5].axis("off")
+
+    axes[6].imshow(_to_depth_numpy(stats["conf_low"][0]), cmap="viridis")
+    axes[6].set_title("conf low", fontsize=10, loc="left")
+    axes[6].axis("off")
+
     gt_w2c = torch.linalg.inv(stats["train_poses"][0])
-    axes[4].text(
+    axes[7].text(
         0.01,
         0.98,
         "gt extrinsic (w2c):\n"
@@ -120,10 +132,10 @@ def visualize_epoch_outputs(stats, save_dir, epoch):
         family="monospace",
         fontsize=8.5,
     )
-    axes[4].set_title("extrinsics", fontsize=10, loc="left")
-    axes[4].axis("off")
+    axes[7].set_title("extrinsics", fontsize=10, loc="left")
+    axes[7].axis("off")
 
-    axes[5].text(
+    axes[8].text(
         0.01,
         0.98,
         "gt intrinsic:\n"
@@ -135,8 +147,8 @@ def visualize_epoch_outputs(stats, save_dir, epoch):
         family="monospace",
         fontsize=8.5,
     )
-    axes[5].set_title("intrinsics", fontsize=10, loc="left")
-    axes[5].axis("off")
+    axes[8].set_title("intrinsics", fontsize=10, loc="left")
+    axes[8].axis("off")
 
     fig.savefig(os.path.join(save_dir, f"epoch_{epoch}_visualization.png"), dpi=150, bbox_inches="tight")
     plt.close(fig)
