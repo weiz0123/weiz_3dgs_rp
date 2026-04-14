@@ -21,6 +21,7 @@ from train_v1_epoch import train_epoch
 
 # models
 from gs_v2_models.v1_gs import V1GSModel
+from gs_v2_models.v2_gs import V2GSModel
 from pipeline.data_loader import RealEstate10KDataset
 
 
@@ -289,6 +290,14 @@ def main():
             sh_degree=1,
             gaussian_per_pixel=1,
             config=config
+        ).to(device)
+    elif args.model_name == "v2_gs":
+        model = V2GSModel(
+            num_view=config.data.n_input_views,
+            sh_degree=1,
+            gaussian_per_pixel=1,
+            emit_stride=4,
+            config=config,
         ).to(device)
     else:
         raise ValueError(f"Model name '{args.model_name}' not recognized. Please choose a valid model_name argument.")

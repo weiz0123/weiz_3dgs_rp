@@ -99,6 +99,15 @@ def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, targe
         sh_out = sh_out[0]
     else:
         raise ValueError(f"Unsupported Gaussian output shape: {tuple(d_xyz.shape)}")
+
+    emit_stride = int(outputs.get("emit_stride", 1))
+    if emit_stride > 1:
+        base_xyz = base_xyz[:, ::emit_stride, ::emit_stride]
+        d_xyz = d_xyz[..., ::emit_stride, ::emit_stride]
+        scales_out = scales_out[..., ::emit_stride, ::emit_stride]
+        quat_out = quat_out[..., ::emit_stride, ::emit_stride]
+        opacity_out = opacity_out[..., ::emit_stride, ::emit_stride]
+        sh_out = sh_out[..., ::emit_stride, ::emit_stride]
     
     # --- 2. Apply Offsets & Flatten ---
     offsets = d_xyz.permute(0, 1, 3, 4, 2) # [V, S, H, W, 3]
