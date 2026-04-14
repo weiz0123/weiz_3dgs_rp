@@ -237,7 +237,7 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
 
         psnr = compute_psnr(estimated_image, target_image)
         ssim = compute_ssim(estimated_image, target_image)
-        lpips = compute_lpips(estimated_image, target_image)
+        lpips = 0.0
 
         total_loss += total_batch_loss.item()
         total_mse += mse_loss.item()
