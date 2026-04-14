@@ -190,9 +190,9 @@ class V1GSModel(nn.Module):
         depth_all = _crop_predictions_to_original(depth_all, original_hw)
 
 
-        last_tokens = tokens[-1] 
-        
-        vggt_spatial = last_tokens[:, :, 1:, :]
+        last_layer_tensor = tokens[-1]
+
+        vggt_spatial = last_layer_tensor[:, :, 1:, :]
 
         # [B, V, C, H, W] -> [B, V, N, C]
         dino_tokens = dino_features.permute(0, 1, 3, 4, 2).reshape(
