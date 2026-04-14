@@ -138,8 +138,8 @@ def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, targe
     settings = GaussianRasterizationSettings(
         image_height=int(H),
         image_width=int(W),
-        tanfovX=tanfovX.item(),
-        tanfovY=tanfovY.item(),
+        tanfovx=tanfovX.item(),
+        tanfovy=tanfovY.item(),
         bg=torch.tensor([0, 0, 0], device=device, dtype=torch.float32),
         scale_modifier=1.0,
         viewmatrix=view_matrix,
