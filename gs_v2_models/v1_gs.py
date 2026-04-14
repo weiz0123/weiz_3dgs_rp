@@ -94,7 +94,7 @@ class V1GSModel(nn.Module):
         )
         self.fusion_transformer = DenseFusionTransformer(
             vggt_dim=2048, 
-            dino_dim=768,  
+            dino_dim=4096,  
             depth=2, 
             num_heads=8
         )
@@ -194,20 +194,32 @@ class V1GSModel(nn.Module):
 
         vggt_spatial = last_layer_tensor[:, :, 1:, :]
 
-        # [B, V, C, H, W] -> [B, V, N, C]
-        dino_tokens = dino_features.permute(0, 1, 3, 4, 2).reshape(
+        feat_h, feat_w = height // self.patch_h, width // self.patch_w
+
+        # Align DINO features to the VGGT patch grid before flattening to tokens.
+        flat_dino = dino_features.reshape(
+            batch_size * num_view,
+            dino_features.shape[2],
+            dino_features.shape[3],
+            dino_features.shape[4],
+        )
+        flat_dino = F.interpolate(
+            flat_dino,
+            size=(feat_h, feat_w),
+            mode="bilinear",
+            align_corners=False,
+        )
+        dino_tokens = flat_dino.permute(0, 2, 3, 1).reshape(
             batch_size,
             num_view,
-            -1,
-            dino_features.shape[2],
+            feat_h * feat_w,
+            flat_dino.shape[1],
         )
 
         fused_spatial = self.fusion_transformer(vggt_spatial, dino_tokens)
 
         # 1. Reshape fused_spatial [B, V, 1200, 2048] to 4D [B*V, 2048, H, W]
         # 1200 tokens usually means 30x40 patches for a 420x560 image
-        feat_h, feat_w = height // self.patch_h, width // self.patch_w
-        
         # [B, V, N, C] -> [B*V, N, C] -> [B*V, C, H, W]
         fused_map = fused_spatial.view(-1, feat_h, feat_w, self.feature_dim).permute(0, 3, 1, 2).contiguous()
 
