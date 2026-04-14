@@ -20,7 +20,11 @@ def get_world_points(depth, intrinsic, extrinsic):
     device = depth.device
     
     # Create pixel grid
-    y, x = torch.meshgrid(torch.arange(h, device=device), torch.arange(w, device=device), indexing='ij')
+    y, x = torch.meshgrid(
+        torch.arange(h, device=device, dtype=depth.dtype),
+        torch.arange(w, device=device, dtype=depth.dtype),
+        indexing='ij',
+    )
     pixels = torch.stack([x, y, torch.ones_like(x)], dim=-1).reshape(1, -1, 3) # [1, H*W, 3]
     pixels = pixels.expand(v, -1, -1).permute(0, 2, 1) # [V, 3, H*W]
 
