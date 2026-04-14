@@ -69,18 +69,47 @@ def render_scene(outputs, depth_all, extrinsic_all, intrinsic_all, target_view_i
     # --- 1. Get Base World Points ---
     # depth_all: [1, 8, 1, H, W], intrin/extrin: [1, 8, ...]
     base_xyz = get_world_points(depth_all[0], intrinsic_all[0], extrinsic_all[0])
+
+    d_xyz = outputs["d_xyz"]
+    scales_out = outputs["scales"]
+    quat_out = outputs["quat"]
+    opacity_out = outputs["opacity"]
+    sh_out = outputs["sh_coeffs"]
+
+    if d_xyz.ndim == 5:
+        num_views = depth_all.shape[1]
+        num_surfaces = d_xyz.shape[1]
+        d_xyz = d_xyz.view(num_views, num_surfaces, 3, d_xyz.shape[-2], d_xyz.shape[-1])
+        scales_out = scales_out.view(num_views, num_surfaces, 3, scales_out.shape[-2], scales_out.shape[-1])
+        quat_out = quat_out.view(num_views, num_surfaces, 4, quat_out.shape[-2], quat_out.shape[-1])
+        opacity_out = opacity_out.view(num_views, num_surfaces, 1, opacity_out.shape[-2], opacity_out.shape[-1])
+        sh_out = sh_out.view(
+            num_views,
+            num_surfaces,
+            3,
+            sh_out.shape[3],
+            sh_out.shape[-2],
+            sh_out.shape[-1],
+        )
+    elif d_xyz.ndim == 6:
+        d_xyz = d_xyz[0]
+        scales_out = scales_out[0]
+        quat_out = quat_out[0]
+        opacity_out = opacity_out[0]
+        sh_out = sh_out[0]
+    else:
+        raise ValueError(f"Unsupported Gaussian output shape: {tuple(d_xyz.shape)}")
     
     # --- 2. Apply Offsets & Flatten ---
-    # outputs['d_xyz'] is [1, 8, 2, 3, H, W]
-    offsets = outputs['d_xyz'][0].permute(0, 1, 3, 4, 2) # [8, 2, H, W, 3]
+    offsets = d_xyz.permute(0, 1, 3, 4, 2) # [V, S, H, W, 3]
     means3D = base_xyz.unsqueeze(1) + offsets           # [8, 2, H, W, 3]
     
     means3D = means3D.reshape(-1, 3)
-    opacity = outputs['opacity'][0].reshape(-1, 1)
-    scales  = outputs['scales'][0].reshape(-1, 3)
-    rotations = outputs['quat'][0].reshape(-1, 4)
-    # SH Coeffs: [8, 2, 3, 16, H, W] -> [N, 16, 3]
-    shs = outputs['sh_coeffs'][0].permute(0, 1, 4, 5, 3, 2).reshape(-1, 16, 3)
+    opacity = opacity_out.reshape(-1, 1)
+    scales  = scales_out.reshape(-1, 3)
+    rotations = quat_out.reshape(-1, 4)
+    # SH Coeffs: [V, S, 3, SH, H, W] -> [N, SH, 3]
+    shs = sh_out.permute(0, 1, 4, 5, 3, 2).reshape(-1, sh_out.shape[3], 3)
 
     # --- 3. Compute View-Specific Parameters ---
     # Grab the target view intrinsic and extrinsic
