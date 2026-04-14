@@ -151,7 +151,7 @@ def main():
     print(f"Saving epoch checkpoints every {config.training.save_every_n_epochs} epochs")
     print(f"Using save_dir: {config.training.save_dir}")
     
-    # TODO: HERE we initilize the 
+    # TODO: HERE we initilize the model
     if args.model_name == "v1_gs":
         model = V1GSModel(
             num_view=config.data.n_input_views,

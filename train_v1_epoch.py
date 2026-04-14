@@ -169,6 +169,29 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         with torch.no_grad():
             model_outputs = model(inputs)
 
+
+        dino_feat  = model_outputs["features"]
+        vggt_depth = model_outputs["depth"]
+        estimated_extrinsics = model_outputs["estimated_extrinsics"]
+        estimated_intrinsics = model_outputs["estimated_intrinsics"]
+
+        print("estimated_extrinsics shape:", estimated_extrinsics.shape)
+        print("estimated_intrinsics shape:", estimated_intrinsics.shape)
+        print("gt train_poses shape:", training_data["train_poses"].shape)
+        print("gt train_intrinsics shape:", training_data["train_intrinsics"].shape)
+        # Loss Computation:
+
+        # extrinsics_loss = torch.nn.functional.mse_loss(
+        #     estimated_extrinsics,
+        #     training_data["train_poses"].to(device),
+        # )
+
+        # intrinsics_loss = torch.nn.functional.mse_loss(
+        #     estimated_intrinsics,
+        #     training_data["train_intrinsics"].to(device),
+        # )
+
+        # TODO: Visulization Inspection (Only one)
         if not _HAS_VISUALIZED:
             save_path = None
             if output_dir is not None:
