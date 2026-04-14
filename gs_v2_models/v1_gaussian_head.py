@@ -52,12 +52,22 @@ class GaussianHead(nn.Module):
             ConvBlock(hidden, hidden, p=4, d=4), # Dilation 4 (sees much further)
             ConvBlock(hidden, hidden, p=1, d=1),
         )
+        self.upsample_refine = nn.Sequential(
+            ConvBlock(hidden, hidden, p=1, d=1),
+            ConvBlock(hidden, hidden, p=1, d=1),
+        )
 
         self.out = nn.Conv2d(hidden, out_dim, 1)
 
-    def forward(self, ref_feat, mv_feat, fused_feat, depth, conf):
+    def forward(self, ref_feat, mv_feat, fused_feat, depth, conf, output_size=None):
         x = torch.cat([ref_feat, mv_feat, fused_feat, depth, conf], dim=1)
         h = self.net(x)
+
+        if output_size is not None and h.shape[-2:] != output_size:
+            h = F.interpolate(h, size=output_size, mode="bilinear", align_corners=False)
+            h = self.upsample_refine(h)
+            conf = F.interpolate(conf, size=output_size, mode="bilinear", align_corners=False)
+
         raw = self.out(h)
 
         batch_size, _, height, width = raw.shape

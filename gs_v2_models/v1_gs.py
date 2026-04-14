@@ -266,7 +266,8 @@ class V1GSModel(nn.Module):
                 mv_feat=fused_map,
                 fused_feat=fused_map,
                 depth=depth_low,
-                conf=conf_low
+                conf=conf_low,
+                output_size=(height, width),
             )    
 
         
