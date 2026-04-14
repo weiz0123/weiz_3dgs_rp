@@ -190,7 +190,7 @@ class V1GSModel(nn.Module):
         depth_all = _crop_predictions_to_original(depth_all, original_hw)
 
 
-        last_layer_vggt_token = tokens[:, -1] # [1, 8, 1201, 2048]
+        # [1, 8, 1201, 2048]
         vggt_spatial = tokens[:, -1][:, :, 1:, :]
 
 
