@@ -106,7 +106,7 @@ class V1GSModel(nn.Module):
             hidden=512,
             sh_degree=self.sh_degree,       
             num_surfaces=self.gaussian_per_pixel,    
-            ).to(config.training.device)        
+            )
 
 
     def freezed_vggt(self):
