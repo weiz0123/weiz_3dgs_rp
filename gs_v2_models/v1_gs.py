@@ -300,7 +300,7 @@ class V1GSModel(nn.Module):
             
             # raw depth
             depth_all, _ = self.vggt.depth_head(tokens, imgs_for_vggt, ps_idx)
-            print(tokens.shape, depth_all.shape, ps_idx.shape)
+            print(len(tokens), tokens[0].shape)
         # normalized detph
         depth_all = depth_all.permute(0, 1, 4, 2, 3).contiguous() # B, V, C, H, W
         depth_all = _crop_predictions_to_original(depth_all, original_hw)
