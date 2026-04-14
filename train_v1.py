@@ -224,6 +224,7 @@ def main():
     parser.add_argument('--pin_memory', type=int, choices=[0, 1], default=None, help='Override config dataloader pin_memory with 0/1')
     parser.add_argument('--save_every_n_epochs', type=int, default=None, help='Override config checkpoint save frequency')
     parser.add_argument('--save_dir_name', type=str, default=None, help='Override the last folder name of config.training.save_dir')
+    parser.add_argument('--enable_scene_scan', type=int, choices=[0, 1], default=1, help='Enable or disable dataset scene scanning with 0/1')
     
     args = parser.parse_args()
 
@@ -263,6 +264,7 @@ def main():
     print(f"Using num_view: {config.data.n_input_views}")
     print(f"Using num_workers: {config.data.num_workers}")
     print(f"Using pin_memory: {config.data.pin_memory}")
+    print(f"Scene scan enabled: {bool(args.enable_scene_scan)}")
     print(f"Saving epoch checkpoints every {config.training.save_every_n_epochs} epochs")
     print(f"Using save_dir: {config.training.save_dir}")
     
@@ -299,7 +301,8 @@ def main():
 
     # TODO Dataset load
     dataset_manager = RealEstate10KDataset(config.data.data_root)
-    dataset_manager.filter_re10k_scenes(config.data.data_root, config.data.n_input_views)
+    if args.enable_scene_scan:
+        dataset_manager.filter_re10k_scenes(config.data.data_root, config.data.n_input_views)
     dataset = dataset_manager
     loader = DataLoader(
         dataset,
