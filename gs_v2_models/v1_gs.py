@@ -1,6 +1,6 @@
 from contextlib import nullcontext
 
-from regex import F
+import torch.nn.functional as F
 import torch
 import torch.nn as nn
 
@@ -12,7 +12,7 @@ from configs.re10k_experiment import (
 from .dense_transformer import CrossAttention, DenseFusionTransformer, SelfAttention
 from .v1_dino_encoder import DinoV3DenseEncoder
 from vggt.utils.pose_enc import pose_encoding_to_extri_intri
-from v1_gaussian_head import GaussianHead 
+from .v1_gaussian_head import GaussianHead
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 
 def _normalize_depth_tensor(x, batch_size, num_views):
@@ -82,7 +82,7 @@ class V1GSModel(nn.Module):
         self.gaussian_per_pixel = gaussian_per_pixel
         self.sh_degree = sh_degree
         self.config = config
-
+        self.feature_dim = 2048
         self.patch_h = 14
         self.patch_w = 14
 
@@ -106,7 +106,7 @@ class V1GSModel(nn.Module):
             hidden=512,
             sh_degree=self.sh_degree,       
             num_surfaces=self.gaussian_per_pixel,    
-            ).to(config.device)        
+            ).to(config.training.device)        
 
 
     def freezed_vggt(self):

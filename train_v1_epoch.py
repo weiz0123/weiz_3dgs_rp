@@ -137,7 +137,7 @@ def render_scene(outputs, depth_all, extrinsic_all, intrinsic_all, target_view_i
 
 
 def train_epoch(model, data_manager, dataloader, optimizer, device, config=None, output_dir=None):
-    model.eval()
+    model.train()
 
     total_loss = 0.0
     total_mse = 0.0
@@ -162,8 +162,9 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         )
 
         inputs = training_data["train_images"].to(device)
+        target_image = training_data["target_image"].to(device)
 
-     
+        optimizer.zero_grad(set_to_none=True)
         model_outputs = model(inputs)
 
         gaussian_head = model_outputs["guaussian_outputs"]
@@ -174,8 +175,8 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         estimated_image = render_scene(
             gaussian_head,
             model_outputs["depth"],
-            training_data["train_poses"].unsqueeze(0).to(device),
-            training_data["train_intrinsics"].unsqueeze(0).to(device),
+            training_data["target_pose"].unsqueeze(0).to(device),
+            training_data["target_intrinsics"].unsqueeze(0).to(device),
             target_view_idx=0,
             H=inputs.shape[3],
             W=inputs.shape[4],
@@ -188,17 +189,21 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         # Loss Computation:
         mse_loss = torch.nn.functional.mse_loss(
             estimated_image,
-            training_data["target_image"].to(device),
+            target_image,
         )
         mae_loss = torch.nn.functional.l1_loss(
             estimated_image,
-            training_data["target_image"].to(device),
+            target_image,
         )
-        psnr = compute_psnr(estimated_image, training_data["target_image"].to(device))
-        ssim = compute_ssim(estimated_image, training_data["target_image"].to(device))
-        lpips = compute_lpips(estimated_image, training_data["target_image"].to(device))
+        total_batch_loss = mse_loss + mae_loss
+        total_batch_loss.backward()
+        optimizer.step()
 
-        total_loss += mse_loss.item() + mae_loss.item()
+        psnr = compute_psnr(estimated_image, target_image)
+        ssim = compute_ssim(estimated_image, target_image)
+        lpips = compute_lpips(estimated_image, target_image)
+
+        total_loss += total_batch_loss.item()
         total_mse += mse_loss.item()
         total_l1 += mae_loss.item()
         total_psnr += float(psnr)
