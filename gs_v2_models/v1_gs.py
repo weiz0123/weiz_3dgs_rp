@@ -73,6 +73,27 @@ def _crop_predictions_to_original(x, original_hw):
     return x[..., :h, :w]
 
 
+def _infer_token_grid(num_tokens, aspect_ratio):
+    if num_tokens <= 0:
+        raise ValueError(f"num_tokens must be positive, got {num_tokens}")
+
+    best_h = 1
+    best_w = num_tokens
+    best_err = float("inf")
+
+    for h in range(1, int(num_tokens ** 0.5) + 1):
+        if num_tokens % h != 0:
+            continue
+        w = num_tokens // h
+        err = abs((w / h) - aspect_ratio)
+        if err < best_err:
+            best_h = h
+            best_w = w
+            best_err = err
+
+    return best_h, best_w
+
+
 
 class V1GSModel(nn.Module):
     def __init__(self, num_view=8, gaussian_per_pixel=2, sh_degree=2, config=None):
@@ -194,7 +215,13 @@ class V1GSModel(nn.Module):
 
         vggt_spatial = last_layer_tensor[:, :, 1:, :]
 
-        feat_h, feat_w = height // self.patch_h, width // self.patch_w
+        num_vggt_tokens = vggt_spatial.shape[2]
+        dino_h = dino_features.shape[3]
+        dino_w = dino_features.shape[4]
+        feat_h, feat_w = _infer_token_grid(
+            num_vggt_tokens,
+            dino_w / max(dino_h, 1),
+        )
 
         # Align DINO features to the VGGT patch grid before flattening to tokens.
         flat_dino = dino_features.reshape(
