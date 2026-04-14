@@ -5,149 +5,146 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-
-_HAS_VISUALIZED = False
-
-
-def _to_image_numpy(image_tensor):
-    image = image_tensor.detach().cpu()
-    if image.ndim == 3:
-        image = image.permute(1, 2, 0)
-    return image.numpy().clip(0.0, 1.0)
+from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
+from eval_metrics_v1 import compute_psnr, compute_ssim, compute_lpips
 
 
-def _to_dino_pca_numpy(feature_tensor):
-    feature = feature_tensor.detach().cpu().float()
-    if feature.ndim != 3:
-        raise ValueError(f"Expected feature tensor [C, H, W], got {tuple(feature.shape)}")
+def get_world_points(depth, intrinsic, extrinsic):
+    """
+    Converts a depth map to world-space 3D points.
+    depth: [V, 1, H, W]
+    intrinsic: [V, 3, 3]
+    extrinsic: [V, 4, 4] (World-to-Camera)
+    """
+    v, _, h, w = depth.shape
+    device = depth.device
+    
+    # Create pixel grid
+    y, x = torch.meshgrid(torch.arange(h, device=device), torch.arange(w, device=device), indexing='ij')
+    pixels = torch.stack([x, y, torch.ones_like(x)], dim=-1).reshape(1, -1, 3) # [1, H*W, 3]
+    pixels = pixels.expand(v, -1, -1).permute(0, 2, 1) # [V, 3, H*W]
 
-    channels, height, width = feature.shape
-    patch_tokens = feature.permute(1, 2, 0).reshape(height * width, channels)
-    patch_tokens = patch_tokens - patch_tokens.mean(dim=0, keepdim=True)
+    # Matrix multiply: inv(K) @ pixels * depth
+    inv_K = torch.inverse(intrinsic)
+    cam_points = inv_K @ pixels # [V, 3, H*W]
+    cam_points = cam_points * depth.reshape(v, 1, -1) # Scale by depth
 
-    q = min(3, patch_tokens.shape[0], patch_tokens.shape[1])
-    if q == 0:
-        raise ValueError("Cannot run PCA on empty DINO feature tensor")
+    # Transform to World Space: inv(Extrinsic) @ cam_points
+    # Note: Extrinsics are usually World-to-Cam, so we invert to get Cam-to-World
+    cam_points_homo = torch.cat([cam_points, torch.ones(v, 1, h*w, device=device)], dim=1)
+    inv_E = torch.inverse(extrinsic)
+    world_points = inv_E @ cam_points_homo # [V, 4, H*W]
+    
+    return world_points[:, :3, :].permute(0, 2, 1).reshape(v, h, w, 3)
 
-    _, _, v = torch.pca_lowrank(patch_tokens, q=q)
-    pca_features = patch_tokens @ v[:, :q]
+def get_projection_matrix(znear, zfar, fovX, fovY, device):
+    tanHalfFovY = torch.tan(fovY / 2)
+    tanHalfFovX = torch.tan(fovX / 2)
 
-    if q < 3:
-        padded = torch.zeros((pca_features.shape[0], 3), dtype=pca_features.dtype)
-        padded[:, :q] = pca_features
-        pca_features = padded
+    top = tanHalfFovY * znear
+    bottom = -top
+    right = tanHalfFovX * znear
+    left = -right
 
-    pca_features = pca_features.reshape(height, width, 3)
-    pca_features = pca_features - pca_features.amin(dim=(0, 1), keepdim=True)
-    denom = pca_features.amax(dim=(0, 1), keepdim=True)
-    denom = torch.where(denom > 0, denom, torch.ones_like(denom))
-    pca_features = pca_features / denom
+    P = torch.zeros(4, 4, device=device)
 
-    return pca_features.numpy().clip(0.0, 1.0)
+    z_sign = 1.0
 
+    P[0, 0] = 2.0 * znear / (right - left)
+    P[1, 1] = 2.0 * znear / (top - bottom)
+    P[0, 2] = (right + left) / (right - left)
+    P[1, 2] = (top + bottom) / (top - bottom)
+    P[3, 2] = z_sign
+    P[2, 2] = z_sign * zfar / (zfar - znear)
+    P[2, 3] = -(zfar * znear) / (zfar - znear)
+    return P
 
-def _to_depth_numpy(depth_tensor):
-    depth = depth_tensor.detach().cpu().float()
-    if depth.ndim == 3 and depth.shape[0] == 1:
-        depth = depth[0]
-    elif depth.ndim != 2:
-        raise ValueError(f"Expected depth tensor [1, H, W] or [H, W], got {tuple(depth.shape)}")
+def render_scene(outputs, depth_all, extrinsic_all, intrinsic_all, target_view_idx, H, W, sh_degree):
+    device = extrinsic_all.device
+    
+    # --- 1. Get Base World Points ---
+    # depth_all: [1, 8, 1, H, W], intrin/extrin: [1, 8, ...]
+    base_xyz = get_world_points(depth_all[0], intrinsic_all[0], extrinsic_all[0])
+    
+    # --- 2. Apply Offsets & Flatten ---
+    # outputs['d_xyz'] is [1, 8, 2, 3, H, W]
+    offsets = outputs['d_xyz'][0].permute(0, 1, 3, 4, 2) # [8, 2, H, W, 3]
+    means3D = base_xyz.unsqueeze(1) + offsets           # [8, 2, H, W, 3]
+    
+    means3D = means3D.reshape(-1, 3)
+    opacity = outputs['opacity'][0].reshape(-1, 1)
+    scales  = outputs['scales'][0].reshape(-1, 3)
+    rotations = outputs['quat'][0].reshape(-1, 4)
+    # SH Coeffs: [8, 2, 3, 16, H, W] -> [N, 16, 3]
+    shs = outputs['sh_coeffs'][0].permute(0, 1, 4, 5, 3, 2).reshape(-1, 16, 3)
 
-    depth = depth.numpy()
-    depth = depth - depth.min()
-    denom = depth.max()
-    if denom > 0:
-        depth = depth / denom
-    return depth
-
-
-def _format_matrix_text(matrix_tensor):
-    matrix = matrix_tensor.detach().cpu().float().numpy()
-    return np.array2string(
-        matrix,
-        precision=4,
-        suppress_small=True,
-        max_line_width=120,
+    # --- 3. Compute View-Specific Parameters ---
+    # Grab the target view intrinsic and extrinsic
+    K = intrinsic_all[0, target_view_idx]
+    # IMPORTANT: Original 3DGS expects row-major matrices for the Rasterizer
+    view_matrix = extrinsic_all[0, target_view_idx].T 
+    
+    fx, fy = K[0, 0], K[1, 1]
+    
+    # Calculate tanFoV
+    tanfovX = W / (2.0 * fx)
+    tanfovY = H / (2.0 * fy)
+    
+    # Convert tanFoV back to FOV angles for our projection helper
+    fovX = 2 * torch.atan(tanfovX)
+    fovY = 2 * torch.atan(tanfovY)
+    
+    # Get the 4x4 Projection Matrix
+    # znear/zfar can be standard 0.01 / 100.0 for most scenes
+    proj_mat_4d = get_projection_matrix(0.01, 100.0, fovX, fovY, device)
+    
+    # The 'full_proj_matrix' is (ViewMatrix @ ProjectionMatrix)
+    # We use .T because the CUDA code expects row-major
+    full_proj_matrix = (view_matrix @ proj_mat_4d).T
+    
+    # --- 4. Setup Rasterizer ---
+    settings = GaussianRasterizationSettings(
+        image_height=int(H),
+        image_width=int(W),
+        tanfovX=tanfovX.item(),
+        tanfovY=tanfovY.item(),
+        bg=torch.tensor([0, 0, 0], device=device, dtype=torch.float32),
+        scale_modifier=1.0,
+        viewmatrix=view_matrix,
+        projmatrix=full_proj_matrix,
+        sh_degree=sh_degree,
+        campos=torch.inverse(view_matrix.T)[:3, 3],
+        prefiltered=False,
+        debug=False
     )
 
-
-def visualize_model_outputs(training_data, model_outputs, save_path=None):
-    features = model_outputs["features"]
-    depth = model_outputs["depth"]
-    estimated_extrinsics = model_outputs["estimated_extrinsics"]
-    num_views = training_data["train_images"].shape[0]
-    fig, axes = plt.subplots(
-        num_views,
-        4,
-        figsize=(21, 3.8 * num_views),
-        constrained_layout=True,
+    rasterizer = GaussianRasterizer(raster_settings=settings)
+    
+    # --- 5. Final Render ---
+    rendered_image, radii = rasterizer(
+        means3D = means3D,
+        means2D = torch.zeros_like(means3D, device=device, requires_grad=True),
+        shs = shs.transpose(1, 2), # Now [N, 3, 16]
+        colors_precomp = None,
+        opacities = opacity,
+        scales = scales,
+        rotations = rotations,
+        cov3D_precomp = None
     )
+    
+    return rendered_image
 
-    if num_views == 1:
-        axes = np.array([axes])
-
-    for view_idx in range(num_views):
-        image_ax = axes[view_idx, 0]
-        feature_ax = axes[view_idx, 1]
-        depth_ax = axes[view_idx, 2]
-        pose_ax = axes[view_idx, 3]
-
-        train_idx = training_data["train_indices"][view_idx]
-        timestamp = float(training_data["train_timestamps"][view_idx])
-
-        image_ax.imshow(_to_image_numpy(training_data["train_images"][view_idx]))
-        image_ax.set_title(
-            f"train idx={train_idx} | t={timestamp:.0f}",
-            fontsize=10,
-            loc="left",
-        )
-        image_ax.axis("off")
-
-        feature_ax.imshow(_to_dino_pca_numpy(features[0, view_idx]))
-        feature_ax.set_title("dino pca rgb", fontsize=10, loc="left")
-        feature_ax.axis("off")
-
-        depth_ax.imshow(_to_depth_numpy(depth[0, view_idx]), cmap="plasma")
-        depth_ax.set_title("vggt depth", fontsize=10, loc="left")
-        depth_ax.axis("off")
-
-        gt_c2w = training_data["train_poses"][view_idx]
-        gt_w2c = torch.linalg.inv(gt_c2w)
-        est_w2c = estimated_extrinsics[0, view_idx]
-        pose_ax.text(
-            0.01,
-            0.98,
-            "gt extrinsic (w2c):\n"
-            f"{_format_matrix_text(gt_w2c)}\n\n"
-            "estimated extrinsic (w2c):\n"
-            f"{_format_matrix_text(est_w2c)}",
-            va="top",
-            ha="left",
-            family="monospace",
-            fontsize=8.5,
-        )
-        pose_ax.set_title("camera pose", fontsize=10, loc="left")
-        pose_ax.axis("off")
-
-    fig.suptitle(
-        f"Scene: {training_data['scene']} | target idx={training_data['target_idx']}",
-        fontsize=14,
-    )
-    if save_path is not None:
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
-        plt.close(fig)
-    else:
-        plt.show()
 
 
 def train_epoch(model, data_manager, dataloader, optimizer, device, config=None, output_dir=None):
-    global _HAS_VISUALIZED
-
     model.eval()
 
     total_loss = 0.0
     total_mse = 0.0
     total_l1 = 0.0
+    total_psnr = 0.0
+    total_ssim = 0.0
+    total_lpips = 0.0
     steps = 0
 
     for batch in tqdm(dataloader, desc="train_epoch", leave=False):
@@ -166,46 +163,64 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
 
         inputs = training_data["train_images"].to(device)
 
-        with torch.no_grad():
-            model_outputs = model(inputs)
+     
+        model_outputs = model(inputs)
 
-
+        gaussian_head = model_outputs["guaussian_outputs"]
         dino_feat  = model_outputs["features"]
         vggt_depth = model_outputs["depth"]
+
+
+        estimated_image = render_scene(
+            gaussian_head,
+            model_outputs["depth"],
+            training_data["train_poses"].unsqueeze(0).to(device),
+            training_data["train_intrinsics"].unsqueeze(0).to(device),
+            target_view_idx=0,
+            H=inputs.shape[3],
+            W=inputs.shape[4],
+            sh_degree=2,
+        )
         estimated_extrinsics = model_outputs["estimated_extrinsics"]
         estimated_intrinsics = model_outputs["estimated_intrinsics"]
 
-        print("estimated_extrinsics shape:", estimated_extrinsics.shape)
-        print("estimated_intrinsics shape:", estimated_intrinsics.shape)
-        print("gt train_poses shape:", training_data["train_poses"].shape)
-        print("gt train_intrinsics shape:", training_data["train_intrinsics"].shape)
+       
         # Loss Computation:
+        mse_loss = torch.nn.functional.mse_loss(
+            estimated_image,
+            training_data["target_image"].to(device),
+        )
+        mae_loss = torch.nn.functional.l1_loss(
+            estimated_image,
+            training_data["target_image"].to(device),
+        )
+        psnr = compute_psnr(estimated_image, training_data["target_image"].to(device))
+        ssim = compute_ssim(estimated_image, training_data["target_image"].to(device))
+        lpips = compute_lpips(estimated_image, training_data["target_image"].to(device))
 
-        # extrinsics_loss = torch.nn.functional.mse_loss(
-        #     estimated_extrinsics,
-        #     training_data["train_poses"].to(device),
-        # )
-
-        # intrinsics_loss = torch.nn.functional.mse_loss(
-        #     estimated_intrinsics,
-        #     training_data["train_intrinsics"].to(device),
-        # )
-
-        # TODO: Visulization Inspection (Only one)
-        if not _HAS_VISUALIZED:
-            save_path = None
-            if output_dir is not None:
-                os.makedirs(output_dir, exist_ok=True)
-                save_path = os.path.join(output_dir, "train_features_depth_preview.png")
-            visualize_model_outputs(training_data, model_outputs, save_path=save_path)
-            _HAS_VISUALIZED = True
-
+        total_loss += mse_loss.item() + mae_loss.item()
+        total_mse += mse_loss.item()
+        total_l1 += mae_loss.item()
+        total_psnr += float(psnr)
+        total_ssim += float(ssim)
+        total_lpips += float(lpips)
         steps += 1
 
     steps = max(steps, 1)
     return {
+        "dino_features": dino_feat.detach().cpu(),
+        "vggt_depth": vggt_depth.detach().cpu(),
+        "estimated_image": estimated_image.detach().cpu(),
+        "estimated_extrinsics": estimated_extrinsics.detach().cpu(),
+        "estimated_intrinsics": estimated_intrinsics.detach().cpu(),
+        "target_image": training_data["target_image"].detach().cpu(),
+        "train_poses": training_data["train_poses"].detach().cpu(),
+        "train_intrinsics": training_data["train_intrinsics"].detach().cpu(),
         "loss_total": total_loss / steps,
         "loss_mse": total_mse / steps,
         "loss_l1": total_l1 / steps,
+        "psnr": total_psnr / steps,
+        "ssim": total_ssim / steps,
+        "lpips": total_lpips / steps,
         "num_steps": steps,
     }

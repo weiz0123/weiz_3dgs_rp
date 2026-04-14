@@ -1,5 +1,6 @@
 from contextlib import nullcontext
 
+from regex import F
 import torch
 import torch.nn as nn
 
@@ -8,9 +9,11 @@ from configs.re10k_experiment import (
     _import_vggt_class,
     _resolve_cache_root,
 )
+from .dense_transformer import CrossAttention, DenseFusionTransformer, SelfAttention
 from .v1_dino_encoder import DinoV3DenseEncoder
 from vggt.utils.pose_enc import pose_encoding_to_extri_intri
-
+from v1_gaussian_head import GaussianHead 
+from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 
 def _normalize_depth_tensor(x, batch_size, num_views):
     if x is None:
@@ -70,159 +73,41 @@ def _crop_predictions_to_original(x, original_hw):
     return x[..., :h, :w]
 
 
-class CrossAttention(nn.Module):
-    """
-    Minimal cross-attention block for later token fusion between
-    DINO and VGGT token sequences.
-
-    query_tokens:   [B, Nq, Cq]
-    context_tokens: [B, Nk, Ck]
-    output:         [B, Nq, Cq]
-    """
-
-    def __init__(self, query_dim, context_dim, num_heads=8, attn_dropout=0.0, proj_dropout=0.0):
-        super().__init__()
-
-        if query_dim % num_heads != 0:
-            raise ValueError(f"query_dim={query_dim} must be divisible by num_heads={num_heads}")
-
-        self.query_dim = query_dim
-        self.context_dim = context_dim
-        self.num_heads = num_heads
-        self.head_dim = query_dim // num_heads
-        self.scale = self.head_dim ** -0.5
-
-        self.q_proj = nn.Linear(query_dim, query_dim)
-        self.k_proj = nn.Linear(context_dim, query_dim)
-        self.v_proj = nn.Linear(context_dim, query_dim)
-
-        self.attn_dropout = nn.Dropout(attn_dropout)
-        self.out_proj = nn.Linear(query_dim, query_dim)
-        self.out_dropout = nn.Dropout(proj_dropout)
-        self.norm_q = nn.LayerNorm(query_dim)
-        self.norm_ctx = nn.LayerNorm(context_dim)
-
-    def forward(self, query_tokens, context_tokens, attention_mask=None, return_attention=False):
-        if query_tokens.ndim != 3:
-            raise ValueError(
-                f"Expected query_tokens [B, Nq, Cq], got {tuple(query_tokens.shape)}"
-            )
-        if context_tokens.ndim != 3:
-            raise ValueError(
-                f"Expected context_tokens [B, Nk, Ck], got {tuple(context_tokens.shape)}"
-            )
-
-        batch_size, num_query, _ = query_tokens.shape
-        _, num_context, _ = context_tokens.shape
-
-        query_tokens = self.norm_q(query_tokens)
-        context_tokens = self.norm_ctx(context_tokens)
-
-        q = self.q_proj(query_tokens)
-        k = self.k_proj(context_tokens)
-        v = self.v_proj(context_tokens)
-
-        q = q.view(batch_size, num_query, self.num_heads, self.head_dim).transpose(1, 2)
-        k = k.view(batch_size, num_context, self.num_heads, self.head_dim).transpose(1, 2)
-        v = v.view(batch_size, num_context, self.num_heads, self.head_dim).transpose(1, 2)
-
-        attn_scores = torch.matmul(q, k.transpose(-1, -2)) * self.scale
-
-        if attention_mask is not None:
-            attn_scores = attn_scores.masked_fill(attention_mask == 0, float("-inf"))
-
-        attn_weights = torch.softmax(attn_scores, dim=-1)
-        attn_weights = self.attn_dropout(attn_weights)
-
-        attended = torch.matmul(attn_weights, v)
-        attended = attended.transpose(1, 2).contiguous().view(batch_size, num_query, self.query_dim)
-        output = self.out_proj(attended)
-        output = self.out_dropout(output)
-
-        if return_attention:
-            return output, attn_weights
-        return output
-
-
-class SelfAttention(nn.Module):
-    """
-    Minimal self-attention block for token refinement within a single
-    token sequence.
-
-    tokens: [B, N, C]
-    output: [B, N, C]
-    """
-
-    def __init__(self, embed_dim, num_heads=8, attn_dropout=0.0, proj_dropout=0.0):
-        super().__init__()
-
-        if embed_dim % num_heads != 0:
-            raise ValueError(f"embed_dim={embed_dim} must be divisible by num_heads={num_heads}")
-
-        self.embed_dim = embed_dim
-        self.num_heads = num_heads
-        self.head_dim = embed_dim // num_heads
-        self.scale = self.head_dim ** -0.5
-
-        self.norm = nn.LayerNorm(embed_dim)
-        self.qkv_proj = nn.Linear(embed_dim, embed_dim * 3)
-        self.attn_dropout = nn.Dropout(attn_dropout)
-        self.out_proj = nn.Linear(embed_dim, embed_dim)
-        self.out_dropout = nn.Dropout(proj_dropout)
-
-    def forward(self, tokens, attention_mask=None, return_attention=False):
-        if tokens.ndim != 3:
-            raise ValueError(f"Expected tokens [B, N, C], got {tuple(tokens.shape)}")
-
-        batch_size, num_tokens, _ = tokens.shape
-        tokens = self.norm(tokens)
-
-        qkv = self.qkv_proj(tokens)
-        q, k, v = torch.chunk(qkv, chunks=3, dim=-1)
-
-        q = q.view(batch_size, num_tokens, self.num_heads, self.head_dim).transpose(1, 2)
-        k = k.view(batch_size, num_tokens, self.num_heads, self.head_dim).transpose(1, 2)
-        v = v.view(batch_size, num_tokens, self.num_heads, self.head_dim).transpose(1, 2)
-
-        attn_scores = torch.matmul(q, k.transpose(-1, -2)) * self.scale
-
-        if attention_mask is not None:
-            attn_scores = attn_scores.masked_fill(attention_mask == 0, float("-inf"))
-
-        attn_weights = torch.softmax(attn_scores, dim=-1)
-        attn_weights = self.attn_dropout(attn_weights)
-
-        attended = torch.matmul(attn_weights, v)
-        attended = attended.transpose(1, 2).contiguous().view(batch_size, num_tokens, self.embed_dim)
-        output = self.out_proj(attended)
-        output = self.out_dropout(output)
-
-        if return_attention:
-            return output, attn_weights
-        return output
-
 
 class V1GSModel(nn.Module):
-    def __init__(self, num_view, config):
+    def __init__(self, num_view=8, gaussian_per_pixel=2, sh_degree=2, config=None):
         super().__init__()
 
         self.num_view = num_view
+        self.gaussian_per_pixel = gaussian_per_pixel
+        self.sh_degree = sh_degree
         self.config = config
 
-        self.dino = self.freezed_dino()
-        self.vggt = self.freezed_vggt()
-
-        # Defautl VGGT, retrain required if changed
         self.patch_h = 14
         self.patch_w = 14
 
-    def freezed_dino(self):
-        dino = DinoV3DenseEncoder(
+
+        self.vggt = self.freezed_vggt()
+        self.dino = DinoV3DenseEncoder(
             model_name=self.config.model.dino_name,
             freeze=self.config.model.freeze_dino,
         )
+        self.fusion_transformer = DenseFusionTransformer(
+            vggt_dim=2048, 
+            dino_dim=768,  
+            depth=2, 
+            num_heads=8
+        )
 
-        return dino
+        self.gaussian_head = GaussianHead(
+            ref_feat_dim=2048,
+            mv_feat_dim=2048,
+            fused_dim=2048,
+            hidden=512,
+            sh_degree=self.sh_degree,       
+            num_surfaces=self.gaussian_per_pixel,    
+            ).to(config.device)        
+
 
     def freezed_vggt(self):
         cache_root = _resolve_cache_root(self.config.model.vggt_cache_dir)
@@ -252,7 +137,6 @@ class V1GSModel(nn.Module):
                 param.requires_grad = False
 
         return vggt
-
 
 
     def forward(self, inputs):
@@ -289,7 +173,7 @@ class V1GSModel(nn.Module):
         with vggt_grad:
 
             # Global and Frame transformer (ed) token
-            tokens, ps_idx = self.vggt.aggregator(imgs_for_vggt)
+            tokens, ps_idx = self.vggt.aggregator(imgs_for_vggt) #size of 24
 
             # camera head
             pose_enc = self.vggt.camera_head(tokens)[-1]
@@ -300,13 +184,49 @@ class V1GSModel(nn.Module):
             
             # raw depth
             depth_all, _ = self.vggt.depth_head(tokens, imgs_for_vggt, ps_idx)
-            print(len(tokens), tokens[0].shape)
+
         # normalized detph
         depth_all = depth_all.permute(0, 1, 4, 2, 3).contiguous() # B, V, C, H, W
         depth_all = _crop_predictions_to_original(depth_all, original_hw)
 
+
+        last_layer_vggt_token = tokens[:, -1] # [1, 8, 1201, 2048]
+        vggt_spatial = tokens[:, -1][:, :, 1:, :]
+
+
+
+        fused_spatial = self.fusion_transformer(vggt_spatial, dino_features)
+
+        # 1. Reshape fused_spatial [B, V, 1200, 2048] to 4D [B*V, 2048, H, W]
+        # 1200 tokens usually means 30x40 patches for a 420x560 image
+        feat_h, feat_w = height // self.patch_h, width // self.patch_w
+        
+        # [B, V, N, C] -> [B*V, N, C] -> [B*V, C, H, W]
+        fused_map = fused_spatial.view(-1, feat_h, feat_w, self.feature_dim).permute(0, 3, 1, 2).contiguous()
+
+        # 2. Resize Depth and Confidence to match the Feature Map (e.g., 30x40)
+        # depth_all is [B, V, 1, H, W] -> flatten to [B*V, 1, H, W]
+        flat_depth = depth_all.reshape(-1, 1, height, width)
+        
+        # Downsample to match the 2048-channel feature map resolution
+        depth_low = F.interpolate(flat_depth, size=(feat_h, feat_w), mode='bilinear', align_corners=False)
+        
+        # For confidence, if you don't have it from VGGT, use a constant 1.0
+        conf_low = torch.ones_like(depth_low)
+    
+
+        outputs = self.gaussian_head(
+                ref_feat=fused_map,
+                mv_feat=fused_map,
+                fused_feat=fused_map,
+                depth=depth_low,
+                conf=conf_low
+            )    
+
+        
+
         return {
-            
+            "guaussian_outputs": outputs,
             "features": dino_features,
             "depth": depth_all,
             "estimated_extrinsics": extrinsic_all.float(),

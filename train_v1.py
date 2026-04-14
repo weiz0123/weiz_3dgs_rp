@@ -7,6 +7,8 @@ from dataclasses import asdict
 from pathlib import Path
 
 import cv2
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 from torch.utils.tensorboard import SummaryWriter
@@ -21,10 +23,123 @@ from train_v1_epoch import train_epoch
 from gs_v2_models.v1_gs import V1GSModel
 from pipeline.data_loader import RealEstate10KDataset
 
+
 def resolve_device(device_name: str) -> str:
     if device_name == "auto":
         return "cuda" if torch.cuda.is_available() else "cpu"
     return device_name
+
+
+def _to_image_numpy(image_tensor):
+    image = image_tensor.detach().cpu()
+    if image.ndim == 3:
+        image = image.permute(1, 2, 0)
+    return image.numpy().clip(0.0, 1.0)
+
+
+def _to_dino_pca_numpy(feature_tensor):
+    feature = feature_tensor.detach().cpu().float()
+    channels, height, width = feature.shape
+    patch_tokens = feature.permute(1, 2, 0).reshape(height * width, channels)
+    patch_tokens = patch_tokens - patch_tokens.mean(dim=0, keepdim=True)
+
+    q = min(3, patch_tokens.shape[0], patch_tokens.shape[1])
+    _, _, v = torch.pca_lowrank(patch_tokens, q=q)
+    pca_features = patch_tokens @ v[:, :q]
+
+    if q < 3:
+        padded = torch.zeros((pca_features.shape[0], 3), dtype=pca_features.dtype)
+        padded[:, :q] = pca_features
+        pca_features = padded
+
+    pca_features = pca_features.reshape(height, width, 3)
+    pca_features = pca_features - pca_features.amin(dim=(0, 1), keepdim=True)
+    denom = pca_features.amax(dim=(0, 1), keepdim=True)
+    denom = torch.where(denom > 0, denom, torch.ones_like(denom))
+    pca_features = pca_features / denom
+
+    return pca_features.numpy().clip(0.0, 1.0)
+
+
+def _to_depth_numpy(depth_tensor):
+    depth = depth_tensor.detach().cpu().float()
+    if depth.ndim == 3 and depth.shape[0] == 1:
+        depth = depth[0]
+    depth = depth.numpy()
+    depth = depth - depth.min()
+    denom = depth.max()
+    if denom > 0:
+        depth = depth / denom
+    return depth
+
+
+def _format_matrix_text(matrix_tensor):
+    matrix = matrix_tensor.detach().cpu().float().numpy()
+    return np.array2string(
+        matrix,
+        precision=4,
+        suppress_small=True,
+        max_line_width=120,
+    )
+
+
+def visualize_epoch_outputs(stats, save_dir, epoch):
+    fig, axes = plt.subplots(
+        1,
+        6,
+        figsize=(30, 5),
+        constrained_layout=True,
+    )
+
+    axes[0].imshow(_to_image_numpy(stats["target_image"]))
+    axes[0].set_title("target image", fontsize=10, loc="left")
+    axes[0].axis("off")
+
+    axes[1].imshow(_to_image_numpy(stats["estimated_image"]))
+    axes[1].set_title("estimated image", fontsize=10, loc="left")
+    axes[1].axis("off")
+
+    axes[2].imshow(_to_dino_pca_numpy(stats["dino_features"][0, 0]))
+    axes[2].set_title("dino features", fontsize=10, loc="left")
+    axes[2].axis("off")
+
+    axes[3].imshow(_to_depth_numpy(stats["vggt_depth"][0, 0]), cmap="plasma")
+    axes[3].set_title("vggt depth", fontsize=10, loc="left")
+    axes[3].axis("off")
+
+    gt_w2c = torch.linalg.inv(stats["train_poses"][0])
+    axes[4].text(
+        0.01,
+        0.98,
+        "gt extrinsic (w2c):\n"
+        f"{_format_matrix_text(gt_w2c)}\n\n"
+        "estimated extrinsic:\n"
+        f"{_format_matrix_text(stats['estimated_extrinsics'][0, 0])}",
+        va="top",
+        ha="left",
+        family="monospace",
+        fontsize=8.5,
+    )
+    axes[4].set_title("extrinsics", fontsize=10, loc="left")
+    axes[4].axis("off")
+
+    axes[5].text(
+        0.01,
+        0.98,
+        "gt intrinsic:\n"
+        f"{_format_matrix_text(stats['train_intrinsics'][0])}\n\n"
+        "estimated intrinsic:\n"
+        f"{_format_matrix_text(stats['estimated_intrinsics'][0, 0])}",
+        va="top",
+        ha="left",
+        family="monospace",
+        fontsize=8.5,
+    )
+    axes[5].set_title("intrinsics", fontsize=10, loc="left")
+    axes[5].axis("off")
+
+    fig.savefig(os.path.join(save_dir, f"epoch_{epoch}_visualization.png"), dpi=150, bbox_inches="tight")
+    plt.close(fig)
 
 
 def save_checkpoint(
@@ -155,6 +270,8 @@ def main():
     if args.model_name == "v1_gs":
         model = V1GSModel(
             num_view=config.data.n_input_views,
+            sh_degree=3,
+            gaussian_per_pixel=2,
             config=config
         ).to(device)
     else:
@@ -224,6 +341,9 @@ def main():
                 "avg_loss",
                 "avg_mse",
                 "avg_l1",
+                "psnr",
+                "ssim",
+                "lpips",
                 "learning_rate",
                 "num_steps",
                 "best_metric",
@@ -251,6 +371,9 @@ def main():
             f"loss={stats['loss_total']:.6f} "
             f"mse={stats['loss_mse']:.6f} "
             f"l1={stats['loss_l1']:.6f} "
+            f"psnr={stats['psnr']:.6f} "
+            f"ssim={stats['ssim']:.6f} "
+            f"lpips={stats['lpips']:.6f} "
             f"lr={current_lr:.6e}"
         )
 
@@ -258,7 +381,12 @@ def main():
             tb_writer.add_scalar("train/loss_total", stats["loss_total"], ep + 1)
             tb_writer.add_scalar("train/loss_mse", stats["loss_mse"], ep + 1)
             tb_writer.add_scalar("train/loss_l1", stats["loss_l1"], ep + 1)
+            tb_writer.add_scalar("train/psnr", stats["psnr"], ep + 1)
+            tb_writer.add_scalar("train/ssim", stats["ssim"], ep + 1)
+            tb_writer.add_scalar("train/lpips", stats["lpips"], ep + 1)
             tb_writer.add_scalar("train/learning_rate", current_lr, ep + 1)
+
+        visualize_epoch_outputs(stats, save_dir, ep + 1)
 
         if (
             config.training.save_every_n_epochs > 0
@@ -303,6 +431,9 @@ def main():
                 stats["loss_total"],
                 stats["loss_mse"],
                 stats["loss_l1"],
+                stats["psnr"],
+                stats["ssim"],
+                stats["lpips"],
                 current_lr,
                 stats["num_steps"],
                 "" if best_metric is None else best_metric,
