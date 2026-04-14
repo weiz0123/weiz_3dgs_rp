@@ -181,8 +181,8 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
             training_data["target_pose"].unsqueeze(0).to(device),
             training_data["target_intrinsics"].unsqueeze(0).to(device),
             target_view_idx=0,
-            H=inputs.shape[3],
-            W=inputs.shape[4],
+            H=inputs.shape[-2],
+            W=inputs.shape[-1],
             sh_degree=2,
         )
         estimated_extrinsics = model_outputs["estimated_extrinsics"]
