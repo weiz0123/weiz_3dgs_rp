@@ -63,12 +63,12 @@ def get_projection_matrix(znear, zfar, fovX, fovY, device):
     P[2, 3] = -(zfar * znear) / (zfar - znear)
     return P
 
-def render_scene(outputs, depth_all, extrinsic_all, intrinsic_all, target_view_idx, H, W, sh_degree):
-    device = extrinsic_all.device
+def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, target_extrinsic, target_intrinsic, H, W, sh_degree):
+    device = source_extrinsics.device
     
     # --- 1. Get Base World Points ---
     # depth_all: [1, 8, 1, H, W], intrin/extrin: [1, 8, ...]
-    base_xyz = get_world_points(depth_all[0], intrinsic_all[0], extrinsic_all[0])
+    base_xyz = get_world_points(depth_all[0], source_intrinsics[0], source_extrinsics[0])
 
     d_xyz = outputs["d_xyz"]
     scales_out = outputs["scales"]
@@ -112,10 +112,9 @@ def render_scene(outputs, depth_all, extrinsic_all, intrinsic_all, target_view_i
     shs = sh_out.permute(0, 1, 4, 5, 3, 2).reshape(-1, sh_out.shape[3], 3)
 
     # --- 3. Compute View-Specific Parameters ---
-    # Grab the target view intrinsic and extrinsic
-    K = intrinsic_all[0, target_view_idx]
+    K = target_intrinsic[0]
     # IMPORTANT: Original 3DGS expects row-major matrices for the Rasterizer
-    view_matrix = extrinsic_all[0, target_view_idx].T 
+    view_matrix = target_extrinsic[0].transpose(-1, -2)
     
     fx, fy = K[0, 0], K[1, 1]
     
@@ -146,7 +145,7 @@ def render_scene(outputs, depth_all, extrinsic_all, intrinsic_all, target_view_i
         viewmatrix=view_matrix,
         projmatrix=full_proj_matrix,
         sh_degree=sh_degree,
-        campos=torch.inverse(view_matrix.T)[:3, 3],
+        campos=torch.inverse(view_matrix.transpose(-1, -2))[:3, 3],
         prefiltered=False,
         debug=False
     )
@@ -211,9 +210,10 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         estimated_image = render_scene(
             gaussian_head,
             model_outputs["depth"],
+            training_data["train_poses"].unsqueeze(0).to(device),
+            training_data["train_intrinsics"].unsqueeze(0).to(device),
             training_data["target_pose"].unsqueeze(0).to(device),
             training_data["target_intrinsics"].unsqueeze(0).to(device),
-            target_view_idx=0,
             H=inputs.shape[-2],
             W=inputs.shape[-1],
             sh_degree=2,
