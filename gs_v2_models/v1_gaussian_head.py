@@ -24,7 +24,7 @@ def _depth_to_world_points(depth, intrinsic, extrinsic):
     Args:
         depth: [N, 1, H, W]
         intrinsic: [N, 3, 3]
-        extrinsic: [N, 4, 4] world-to-camera
+        extrinsic: [N, 3, 4] or [N, 4, 4] world-to-camera
 
     Returns:
         world points with shape [N, 3, H, W]
@@ -49,7 +49,16 @@ def _depth_to_world_points(depth, intrinsic, extrinsic):
         [cam_points, torch.ones(n, 1, h * w, device=device, dtype=dtype)],
         dim=1,
     )
-    inv_e = torch.inverse(extrinsic.to(dtype))
+    extrinsic = extrinsic.to(dtype)
+    if extrinsic.shape[-2:] == (3, 4):
+        extrinsic_h = torch.zeros(n, 4, 4, device=device, dtype=dtype)
+        extrinsic_h[:, :3, :4] = extrinsic
+        extrinsic_h[:, 3, 3] = 1.0
+        extrinsic = extrinsic_h
+    elif extrinsic.shape[-2:] != (4, 4):
+        raise ValueError(f"Expected extrinsic shape [N,3,4] or [N,4,4], got {tuple(extrinsic.shape)}")
+
+    inv_e = torch.inverse(extrinsic)
     world_points = inv_e @ cam_points_homo
     return world_points[:, :3, :].reshape(n, 3, h, w)
 

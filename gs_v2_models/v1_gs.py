@@ -95,7 +95,7 @@ class V1GSModel(nn.Module):
         extrinsic_all = vggt_outputs["estimated_extrinsics"]
         intrinsic_all = vggt_outputs["estimated_intrinsics"]
         flat_depth = depth_all.reshape(batch_size * num_view, 1, height, width)
-        flat_extrinsics = extrinsic_all.reshape(batch_size * num_view, 4, 4)
+        flat_extrinsics = extrinsic_all.reshape(batch_size * num_view, extrinsic_all.shape[-2], extrinsic_all.shape[-1])
         flat_intrinsics = intrinsic_all.reshape(batch_size * num_view, 3, 3)
 
         depth_low = F.interpolate(
