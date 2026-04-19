@@ -9,6 +9,42 @@ from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianR
 from eval_metrics_v1 import compute_psnr, compute_ssim, compute_lpips
 
 
+def _to_pixel_intrinsics(intrinsic, h, w):
+    """
+    RealEstate10K intrinsics are often normalized:
+      fx, cx are in width units
+      fy, cy are in height units
+
+    Convert them to pixel-space when they look normalized.
+    """
+    k = intrinsic.clone()
+    if k.shape[-2:] != (3, 3):
+        raise ValueError(f"Expected intrinsics [...,3,3], got {tuple(k.shape)}")
+
+    max_f = torch.max(k[..., 0, 0].abs().amax(), k[..., 1, 1].abs().amax())
+    max_c = torch.max(k[..., 0, 2].abs().amax(), k[..., 1, 2].abs().amax())
+
+    if max_f < 10.0 and max_c <= 2.0:
+        k[..., 0, 0] = k[..., 0, 0] * w
+        k[..., 1, 1] = k[..., 1, 1] * h
+        k[..., 0, 2] = k[..., 0, 2] * w
+        k[..., 1, 2] = k[..., 1, 2] * h
+
+    return k
+
+
+def _to_homogeneous_4x4(extrinsic):
+    if extrinsic.shape[-2:] == (4, 4):
+        return extrinsic
+    if extrinsic.shape[-2:] != (3, 4):
+        raise ValueError(f"Expected extrinsic [...,3,4] or [...,4,4], got {tuple(extrinsic.shape)}")
+
+    out = torch.zeros(*extrinsic.shape[:-2], 4, 4, device=extrinsic.device, dtype=extrinsic.dtype)
+    out[..., :3, :4] = extrinsic
+    out[..., 3, 3] = 1.0
+    return out
+
+
 def get_world_points(depth, intrinsic, extrinsic):
     """
     Converts a depth map to world-space 3D points.
@@ -29,6 +65,9 @@ def get_world_points(depth, intrinsic, extrinsic):
     pixels = pixels.expand(v, -1, -1).permute(0, 2, 1) # [V, 3, H*W]
 
     # Matrix multiply: inv(K) @ pixels * depth
+    intrinsic = _to_pixel_intrinsics(intrinsic, h, w)
+    extrinsic = _to_homogeneous_4x4(extrinsic)
+
     inv_K = torch.inverse(intrinsic)
     cam_points = inv_K @ pixels # [V, 3, H*W]
     cam_points = cam_points * depth.reshape(v, 1, -1) # Scale by depth
@@ -111,7 +150,8 @@ def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, targe
     if means3d_out is not None:
         means3D = means3d_out.permute(0, 1, 3, 4, 2)
     else:
-        base_xyz = get_world_points(depth_all[0], source_intrinsics[0], source_extrinsics[0])
+        source_w2c = torch.inverse(_to_homogeneous_4x4(source_extrinsics[0]))
+        base_xyz = get_world_points(depth_all[0], source_intrinsics[0], source_w2c)
         offsets = d_xyz.permute(0, 1, 3, 4, 2)
         means3D = base_xyz.unsqueeze(1) + offsets
     
@@ -123,9 +163,10 @@ def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, targe
     shs = sh_out.permute(0, 1, 4, 5, 3, 2).reshape(-1, sh_out.shape[3], 3)
 
     # --- 3. Compute View-Specific Parameters ---
-    K = target_intrinsic[0]
-    # IMPORTANT: Original 3DGS expects row-major matrices for the Rasterizer
-    view_matrix = target_extrinsic[0].transpose(-1, -2)
+    K = _to_pixel_intrinsics(target_intrinsic[0], H, W)
+    target_w2c = torch.inverse(_to_homogeneous_4x4(target_extrinsic[0]))
+    # Original 3DGS expects row-major matrices for the rasterizer.
+    view_matrix = target_w2c.transpose(-1, -2)
     
     fx, fy = K[0, 0], K[1, 1]
     
