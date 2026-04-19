@@ -134,6 +134,8 @@ class DepthAnchoredGaussianHead(nn.Module):
                 base = surface_idx * self.per_surface_dim
                 quat_base = base + 6
                 self.out.bias[quat_base] = 1.0
+                opacity_base = base + 10
+                self.out.bias[opacity_base] = -2.0
                 sh_base = base + 11  # 3 dxyz + 3 scale + 4 quat + 1 opacity
                 for color_idx in range(3):
                     dc_index = sh_base + color_idx * self.sh_coeff_dim
@@ -165,16 +167,16 @@ class DepthAnchoredGaussianHead(nn.Module):
         cursor += 1
         sh_raw = raw[:, :, cursor:cursor + self.sh_out_dim]
 
-        d_xyz = 0.01 * torch.tanh(dxyz_raw)
-        base_scales = self.min_scale + self.max_scale * torch.sigmoid(s_raw)
+        d_xyz = 0.002 * torch.tanh(dxyz_raw)
+        base_scales = torch.exp(s_raw - 6.0).clamp(min=self.min_scale, max=self.max_scale)
         quat = F.normalize(q_raw, dim=2, eps=1e-6)
         opacity = torch.sigmoid(a_raw)
 
         if conf is not None:
             conf = conf.to(raw.dtype)
             conf_expanded = conf.unsqueeze(1)
-            scales = base_scales * (1.25 - 0.75 * conf_expanded)
-            opacity = opacity * (0.25 + 0.75 * conf_expanded)
+            scales = base_scales * (0.1 + 0.9 * conf_expanded)
+            opacity = opacity * (0.1 + 0.9 * conf_expanded)
         else:
             scales = base_scales
 

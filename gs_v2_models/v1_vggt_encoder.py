@@ -153,10 +153,13 @@ class V1VGGTEncoder(nn.Module):
                 pose_enc,
                 original_hw,
             )
-            depth_all, _ = self.vggt.depth_head(tokens, imgs_for_vggt, ps_idx)
+            depth_all, depth_conf = self.vggt.depth_head(tokens, imgs_for_vggt, ps_idx)
 
         depth_all = depth_all.permute(0, 1, 4, 2, 3).contiguous()
         depth_all = _crop_predictions_to_original(depth_all, original_hw)
+        if depth_conf.ndim == 4:
+            depth_conf = depth_conf.unsqueeze(2)
+        depth_conf = _crop_predictions_to_original(depth_conf, original_hw)
 
         if DEBUG.is_first_batch():
             DEBUG.log_debuge_csv(
@@ -165,6 +168,7 @@ class V1VGGTEncoder(nn.Module):
                 padded_inputs=imgs_for_vggt,
                 tokens=tokens,
                 depth=depth_all,
+                depth_conf=depth_conf,
                 estimated_extrinsics=extrinsic_all,
                 estimated_intrinsics=intrinsic_all,
                 original_hw=original_hw,
@@ -173,6 +177,7 @@ class V1VGGTEncoder(nn.Module):
         return {
             "tokens": tokens,
             "depth": depth_all,
+            "depth_conf": depth_conf.float(),
             "estimated_extrinsics": extrinsic_all.float(),
             "estimated_intrinsics": intrinsic_all.float(),
             "original_hw": original_hw,

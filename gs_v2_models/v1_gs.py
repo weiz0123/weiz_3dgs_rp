@@ -108,10 +108,12 @@ class V1GSModel(nn.Module):
         # VGGT outputs
         vggt_outputs = self.vggt(inputs)
         depth_all = vggt_outputs["depth"]
+        depth_conf_all = vggt_outputs["depth_conf"]
         extrinsic_all = vggt_outputs["estimated_extrinsics"] # not used currently
         intrinsic_all = vggt_outputs["estimated_intrinsics"] # not used currently
 
         flat_depth = depth_all.reshape(batch_size * num_view, 1, height, width)
+        flat_depth_conf = depth_conf_all.reshape(batch_size * num_view, 1, height, width)
         train_w2c = torch.inverse(train_poses)
         flat_extrinsics = train_w2c.reshape(batch_size * num_view, train_w2c.shape[-2], train_w2c.shape[-1])
         flat_intrinsics = train_intrinsics.reshape(batch_size * num_view, 3, 3)
@@ -134,16 +136,19 @@ class V1GSModel(nn.Module):
             mode="bilinear",
             align_corners=False,
         )
-        conf_low = torch.ones_like(depth_low)
-        conf_full = torch.ones_like(flat_depth)
+        conf_low = F.interpolate(
+            flat_depth_conf,
+            size=(feat_h, feat_w),
+            mode="bilinear",
+            align_corners=False,
+        )
 
         outputs = self.gaussian_head(
                 feat=flat_features,
-                depth=flat_depth,
+                depth=depth_low,
                 intrinsic=flat_intrinsics,
                 extrinsic=flat_extrinsics,
-                conf=conf_full,
-                output_size=(height, width),
+                conf=conf_low,
             )
 
         if DEBUG.is_first_batch():
@@ -154,6 +159,7 @@ class V1GSModel(nn.Module):
                 flat_features=flat_features,
                 depth_all=depth_all,
                 flat_depth=flat_depth,
+                depth_conf_all=depth_conf_all,
                 flat_intrinsics=flat_intrinsics,
                 flat_extrinsics=flat_extrinsics,
                 depth_low=depth_low,
