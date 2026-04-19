@@ -65,16 +65,13 @@ def get_projection_matrix(znear, zfar, fovX, fovY, device):
 
 def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, target_extrinsic, target_intrinsic, H, W, sh_degree):
     device = source_extrinsics.device
-    
-    # --- 1. Get Base World Points ---
-    # depth_all: [1, 8, 1, H, W], intrin/extrin: [1, 8, ...]
-    base_xyz = get_world_points(depth_all[0], source_intrinsics[0], source_extrinsics[0])
 
     d_xyz = outputs["d_xyz"]
     scales_out = outputs["scales"]
     quat_out = outputs["quat"]
     opacity_out = outputs["opacity"]
     sh_out = outputs["sh_coeffs"]
+    means3d_out = outputs.get("means3D")
 
     if d_xyz.ndim == 5:
         num_views = depth_all.shape[1]
@@ -91,18 +88,32 @@ def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, targe
             sh_out.shape[-2],
             sh_out.shape[-1],
         )
+        if means3d_out is not None:
+            means3d_out = means3d_out.view(
+                num_views,
+                num_surfaces,
+                3,
+                means3d_out.shape[-2],
+                means3d_out.shape[-1],
+            )
     elif d_xyz.ndim == 6:
         d_xyz = d_xyz[0]
         scales_out = scales_out[0]
         quat_out = quat_out[0]
         opacity_out = opacity_out[0]
         sh_out = sh_out[0]
+        if means3d_out is not None:
+            means3d_out = means3d_out[0]
     else:
         raise ValueError(f"Unsupported Gaussian output shape: {tuple(d_xyz.shape)}")
 
-    # --- 2. Apply Offsets & Flatten ---
-    offsets = d_xyz.permute(0, 1, 3, 4, 2) # [V, S, H, W, 3]
-    means3D = base_xyz.unsqueeze(1) + offsets           # [8, 2, H, W, 3]
+    # --- 2. Build Means & Flatten ---
+    if means3d_out is not None:
+        means3D = means3d_out.permute(0, 1, 3, 4, 2)
+    else:
+        base_xyz = get_world_points(depth_all[0], source_intrinsics[0], source_extrinsics[0])
+        offsets = d_xyz.permute(0, 1, 3, 4, 2)
+        means3D = base_xyz.unsqueeze(1) + offsets
     
     means3D = means3D.reshape(-1, 3)
     opacity = opacity_out.reshape(-1, 1)
@@ -258,6 +269,7 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         "estimated_extrinsics": estimated_extrinsics.detach().cpu(),
         "estimated_intrinsics": estimated_intrinsics.detach().cpu(),
         "target_image": training_data["target_image"].detach().cpu(),
+        "train_images": training_data["train_images"].detach().cpu(),
         "train_poses": training_data["train_poses"].detach().cpu(),
         "train_intrinsics": training_data["train_intrinsics"].detach().cpu(),
         "loss_total": total_loss / steps,

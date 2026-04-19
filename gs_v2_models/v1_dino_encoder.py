@@ -37,7 +37,18 @@ class DinoV3DenseEncoder(nn.Module):
         )
 
     def forward(self, x):
-        batch_size, _, height, width = x.shape
+        is_multiview = x.ndim == 5
+
+        if x.ndim == 5:
+            batch_size, num_views, _, height, width = x.shape
+            x = x.reshape(batch_size * num_views, 3, height, width)
+        elif x.ndim == 4:
+            batch_size, _, height, width = x.shape
+            num_views = None
+        else:
+            raise ValueError(
+                f"Expected DINO input with shape [B,3,H,W] or [B,V,3,H,W], got {tuple(x.shape)}"
+            )
 
         x = (x - self.mean) / self.std
         outputs = self.backbone(pixel_values=x, output_hidden_states=True)
@@ -55,6 +66,11 @@ class DinoV3DenseEncoder(nn.Module):
                 f"DINOv3 reshape mismatch H={height} W={width} gh={grid_h} gw={grid_w} N={num_patches}"
             )
 
-        features = patch_tokens.reshape(batch_size, grid_h, grid_w, channels)
+        features = patch_tokens.reshape(-1, grid_h, grid_w, channels)
         features = features.permute(0, 3, 1, 2).contiguous()
+
+        if is_multiview:
+            features = features.reshape(batch_size, num_views, channels, grid_h, grid_w)
+            cls_token = cls_token.reshape(batch_size, num_views, channels)
+
         return features, cls_token

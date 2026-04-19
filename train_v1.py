@@ -37,6 +37,11 @@ def _to_image_numpy(image_tensor):
     return image.numpy().clip(0.0, 1.0)
 
 
+def _save_rgb_image(path, image_tensor):
+    image = (_to_image_numpy(image_tensor) * 255.0).astype(np.uint8)
+    cv2.imwrite(path, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+
+
 def _to_dino_pca_numpy(feature_tensor):
     feature = feature_tensor.detach().cpu().float()
     channels, height, width = feature.shape
@@ -84,6 +89,17 @@ def _format_matrix_text(matrix_tensor):
 
 
 def visualize_epoch_outputs(stats, save_dir, epoch):
+    epoch_output_dir = os.path.join(save_dir, f"epoch_{epoch}_outputs")
+    os.makedirs(epoch_output_dir, exist_ok=True)
+
+    _save_rgb_image(os.path.join(epoch_output_dir, "target_image.png"), stats["target_image"])
+    _save_rgb_image(os.path.join(epoch_output_dir, "estimated_image.png"), stats["estimated_image"])
+    for view_idx, input_image in enumerate(stats["train_images"]):
+        _save_rgb_image(
+            os.path.join(epoch_output_dir, f"input_view_{view_idx:02d}.png"),
+            input_image,
+        )
+
     fig, axes = plt.subplots(
         1,
         9,
