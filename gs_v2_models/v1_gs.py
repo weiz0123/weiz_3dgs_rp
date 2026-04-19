@@ -41,6 +41,7 @@ class V1GSModel(nn.Module):
         self.feature_dim = 2048  # 
         self.patch_h = 14
         self.patch_w = 14
+        self._printed_intrinsics_debug = False
 
 
         self.vggt = V1VGGTEncoder(
@@ -64,8 +65,8 @@ class V1GSModel(nn.Module):
             hidden=256,
             sh_degree=self.sh_degree,
             num_surfaces=self.gaussian_per_pixel,
-            min_scale=0.01,
-            max_scale=0.05,
+            min_scale=0.001,
+            max_scale=0.02,
             init_dc_bias=0.5,
             )
 
@@ -113,6 +114,18 @@ class V1GSModel(nn.Module):
         train_w2c = torch.inverse(train_poses)
         flat_extrinsics = train_w2c.reshape(batch_size * num_view, train_w2c.shape[-2], train_w2c.shape[-1])
         flat_intrinsics = train_intrinsics.reshape(batch_size * num_view, 3, 3)
+        if not self._printed_intrinsics_debug:
+            intr0 = flat_intrinsics[0].detach().cpu()
+            looks_normalized = (
+                intr0[0, 0].abs() < 10
+                and intr0[1, 1].abs() < 10
+                and intr0[0, 2].abs() <= 2
+                and intr0[1, 2].abs() <= 2
+            )
+            print("flat_intrinsics[0]:")
+            print(intr0)
+            print(f"looks_normalized={looks_normalized}")
+            self._printed_intrinsics_debug = True
 
         depth_low = F.interpolate(
             flat_depth,

@@ -41,12 +41,42 @@ def _crop_predictions_to_original(x, original_hw):
     return x[..., :h, :w]
 
 
+def _set_requires_grad(module, requires_grad):
+    if module is None:
+        return
+    for param in module.parameters():
+        param.requires_grad = requires_grad
+
+
+def _find_block_container(module):
+    if module is None:
+        return None
+
+    for attr_name in (
+        "blocks",
+        "layers",
+        "transformer_blocks",
+        "stages",
+        "stage_blocks",
+    ):
+        child = getattr(module, attr_name, None)
+        if isinstance(child, (nn.ModuleList, nn.Sequential)) and len(child) > 0:
+            return child
+
+    for _, child in module.named_children():
+        if isinstance(child, (nn.ModuleList, nn.Sequential)) and len(child) > 0:
+            return child
+
+    return None
+
+
 class V1VGGTEncoder(nn.Module):
     def __init__(self, config, patch_h=14, patch_w=14):
         super().__init__()
         self.config = config
         self.patch_h = patch_h
         self.patch_w = patch_w
+        self._vggt_has_trainable_params = False
         self.vggt = self._build_vggt()
 
     def _build_vggt(self):
@@ -72,9 +102,26 @@ class V1VGGTEncoder(nn.Module):
         vggt.load_state_dict(state_dict)
 
         if self.config.model.freeze_vggt:
-            vggt.eval()
             for param in vggt.parameters():
                 param.requires_grad = False
+
+            if self.config.model.vggt_unfreeze_heads:
+                _set_requires_grad(getattr(vggt, "camera_head", None), True)
+                _set_requires_grad(getattr(vggt, "depth_head", None), True)
+
+            num_tail_blocks = max(0, int(self.config.model.vggt_unfreeze_last_blocks))
+            if num_tail_blocks > 0:
+                block_container = _find_block_container(getattr(vggt, "aggregator", None))
+                if block_container is not None:
+                    for block in list(block_container)[-num_tail_blocks:]:
+                        _set_requires_grad(block, True)
+        else:
+            for param in vggt.parameters():
+                param.requires_grad = True
+
+        self._vggt_has_trainable_params = any(param.requires_grad for param in vggt.parameters())
+        if not self._vggt_has_trainable_params:
+            vggt.eval()
 
         return vggt
 
@@ -85,7 +132,7 @@ class V1VGGTEncoder(nn.Module):
             self.patch_w,
         )
 
-        vggt_grad = torch.no_grad() if self.config.model.freeze_vggt else nullcontext()
+        vggt_grad = nullcontext() if self._vggt_has_trainable_params else torch.no_grad()
         with vggt_grad:
             tokens, ps_idx = self.vggt.aggregator(imgs_for_vggt)
             pose_enc = self.vggt.camera_head(tokens)[-1]

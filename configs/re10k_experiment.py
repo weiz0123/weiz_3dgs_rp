@@ -199,6 +199,8 @@ class ModelConfig:
     dino_name: str = "facebook/dinov3-vit7b16-pretrain-lvd1689m"
     freeze_dino: bool = True
     freeze_vggt: bool = True
+    vggt_unfreeze_heads: bool = True
+    vggt_unfreeze_last_blocks: int = 1
     num_depth_bins: int = 48
     depth_min: float = 0.5
     depth_max: float = 20.0

@@ -33,6 +33,15 @@ def _depth_to_world_points(depth, intrinsic, extrinsic):
     device = depth.device
     dtype = depth.dtype
 
+    intrinsic = intrinsic.to(dtype).clone()
+    max_f = torch.max(intrinsic[..., 0, 0].abs().amax(), intrinsic[..., 1, 1].abs().amax())
+    max_c = torch.max(intrinsic[..., 0, 2].abs().amax(), intrinsic[..., 1, 2].abs().amax())
+    if max_f < 10.0 and max_c <= 2.0:
+        intrinsic[..., 0, 0] = intrinsic[..., 0, 0] * w
+        intrinsic[..., 1, 1] = intrinsic[..., 1, 1] * h
+        intrinsic[..., 0, 2] = intrinsic[..., 0, 2] * w
+        intrinsic[..., 1, 2] = intrinsic[..., 1, 2] * h
+
     y, x = torch.meshgrid(
         torch.arange(h, device=device, dtype=dtype),
         torch.arange(w, device=device, dtype=dtype),
@@ -41,7 +50,7 @@ def _depth_to_world_points(depth, intrinsic, extrinsic):
     pixels = torch.stack([x, y, torch.ones_like(x)], dim=0).reshape(1, 3, h * w)
     pixels = pixels.expand(n, -1, -1)
 
-    inv_k = torch.inverse(intrinsic.to(dtype))
+    inv_k = torch.inverse(intrinsic)
     cam_points = inv_k @ pixels
     cam_points = cam_points * depth.reshape(n, 1, h * w)
 
@@ -68,10 +77,9 @@ class DepthAnchoredGaussianHead(nn.Module):
     Gaussian head where VGGT depth initializes Gaussian means directly.
 
     This head learns appearance and basic Gaussian parameters from image features:
-    - `means3D` comes from backprojected depth
-    - `d_xyz` is fixed to zero
-    - `quat` is fixed to the identity rotation
-    - learned outputs are `scales`, `opacity`, and `sh_coeffs`
+    - `means3D` comes from backprojected depth plus a learned small `delta_xyz`
+    - `quat` is predicted and normalized
+    - learned outputs are `delta_xyz`, `scales`, `quat`, `opacity`, and `sh_coeffs`
     """
 
     def __init__(
@@ -80,8 +88,8 @@ class DepthAnchoredGaussianHead(nn.Module):
         hidden=256,
         sh_degree=0,
         num_surfaces=1,
-        min_scale=0.01,
-        max_scale=0.05,
+        min_scale=0.001,
+        max_scale=0.02,
         init_dc_bias=0.5,
     ):
         super().__init__()
@@ -95,10 +103,12 @@ class DepthAnchoredGaussianHead(nn.Module):
         self.init_dc_bias = init_dc_bias
 
         # Per surface:
+        #   3 delta xyz channels
         #   3 scale channels
+        #   4 quaternion channels
         #   1 opacity channel
         #   3 * num_sh_coeffs SH channels
-        self.per_surface_dim = 3 + 1 + self.sh_out_dim
+        self.per_surface_dim = 3 + 3 + 4 + 1 + self.sh_out_dim
         out_dim = self.per_surface_dim * self.num_surfaces
 
         self.net = nn.Sequential(
@@ -121,7 +131,9 @@ class DepthAnchoredGaussianHead(nn.Module):
         with torch.no_grad():
             for surface_idx in range(self.num_surfaces):
                 base = surface_idx * self.per_surface_dim
-                sh_base = base + 4  # 3 scale channels + 1 opacity channel
+                quat_base = base + 6
+                self.out.bias[quat_base] = 1.0
+                sh_base = base + 11  # 3 dxyz + 3 scale + 4 quat + 1 opacity
                 for color_idx in range(3):
                     dc_index = sh_base + color_idx * self.sh_coeff_dim
                     self.out.bias[dc_index] = self.init_dc_bias
@@ -142,13 +154,19 @@ class DepthAnchoredGaussianHead(nn.Module):
         raw = raw.view(batch_size, self.num_surfaces, self.per_surface_dim, height, width)
 
         cursor = 0
+        dxyz_raw = raw[:, :, cursor:cursor + 3]
+        cursor += 3
         s_raw = raw[:, :, cursor:cursor + 3]
         cursor += 3
+        q_raw = raw[:, :, cursor:cursor + 4]
+        cursor += 4
         a_raw = raw[:, :, cursor:cursor + 1]
         cursor += 1
         sh_raw = raw[:, :, cursor:cursor + self.sh_out_dim]
 
+        d_xyz = 0.01 * torch.tanh(dxyz_raw)
         base_scales = self.min_scale + self.max_scale * torch.sigmoid(s_raw)
+        quat = F.normalize(q_raw, dim=2, eps=1e-6)
         opacity = torch.sigmoid(a_raw)
 
         if conf is not None:
@@ -169,28 +187,7 @@ class DepthAnchoredGaussianHead(nn.Module):
         )
 
         base_means = _depth_to_world_points(depth, intrinsic, extrinsic)
-        means3D = base_means.unsqueeze(1).expand(-1, self.num_surfaces, -1, -1, -1).contiguous()
-
-        d_xyz = torch.zeros(
-            batch_size,
-            self.num_surfaces,
-            3,
-            height,
-            width,
-            device=raw.device,
-            dtype=raw.dtype,
-        )
-
-        quat = torch.zeros(
-            batch_size,
-            self.num_surfaces,
-            4,
-            height,
-            width,
-            device=raw.device,
-            dtype=raw.dtype,
-        )
-        quat[:, :, 0] = 1.0
+        means3D = base_means.unsqueeze(1) + d_xyz
 
         return {
             "means3D": means3D,
