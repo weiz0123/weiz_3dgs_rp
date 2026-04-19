@@ -64,8 +64,9 @@ class V1GSModel(nn.Module):
             hidden=256,
             sh_degree=self.sh_degree,
             num_surfaces=self.gaussian_per_pixel,
-            min_scale=0.002,
-            max_scale=0.03,
+            min_scale=0.01,
+            max_scale=0.05,
+            init_dc_bias=0.5,
             )
 
     def forward(self, inputs):

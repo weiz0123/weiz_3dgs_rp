@@ -78,10 +78,11 @@ class DepthAnchoredGaussianHead(nn.Module):
         self,
         feat_dim,
         hidden=256,
-        sh_degree=1,
+        sh_degree=0,
         num_surfaces=1,
-        min_scale=0.002,
-        max_scale=0.03,
+        min_scale=0.01,
+        max_scale=0.05,
+        init_dc_bias=0.5,
     ):
         super().__init__()
 
@@ -91,6 +92,7 @@ class DepthAnchoredGaussianHead(nn.Module):
         self.num_surfaces = num_surfaces
         self.min_scale = min_scale
         self.max_scale = max_scale
+        self.init_dc_bias = init_dc_bias
 
         # Per surface:
         #   3 scale channels
@@ -110,6 +112,19 @@ class DepthAnchoredGaussianHead(nn.Module):
             ConvBlock(hidden, hidden, p=1, d=1),
         )
         self.out = nn.Conv2d(hidden, out_dim, 1)
+        self._init_output_layer()
+
+    def _init_output_layer(self):
+        nn.init.zeros_(self.out.weight)
+        nn.init.zeros_(self.out.bias)
+
+        with torch.no_grad():
+            for surface_idx in range(self.num_surfaces):
+                base = surface_idx * self.per_surface_dim
+                sh_base = base + 4  # 3 scale channels + 1 opacity channel
+                for color_idx in range(3):
+                    dc_index = sh_base + color_idx * self.sh_coeff_dim
+                    self.out.bias[dc_index] = self.init_dc_bias
 
     def forward(self, feat, depth, intrinsic, extrinsic, conf=None, output_size=None):
         h = self.net(feat)
