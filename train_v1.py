@@ -15,6 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 # configs
 from configs.re10k_experiment import get_default_config
+from debug_util import DEBUG
 
 # utils
 from train_v1_epoch import train_epoch
@@ -22,6 +23,12 @@ from train_v1_epoch import train_epoch
 # models
 from gs_v2_models.v1_gs import V1GSModel
 from pipeline.data_loader import RealEstate10KDataset
+
+
+def _count_parameters(model):
+    total = sum(param.numel() for param in model.parameters())
+    trainable = sum(param.numel() for param in model.parameters() if param.requires_grad)
+    return total, trainable
 
 
 def resolve_device(device_name: str) -> str:
@@ -283,6 +290,8 @@ def main():
     run_version = args.version or "v0_0"
     save_dir = os.path.join(config.training.save_dir, f"{run_model_name}_{run_version}")
     os.makedirs(save_dir, exist_ok=True)
+    debug_dir = os.path.join(save_dir, "debug")
+    debug_log_path = DEBUG.configure(debug_dir, enabled=True, reset=True)
 
     with open(os.path.join(save_dir, "config.json"), "w", encoding="utf-8") as f:
         json.dump(asdict(config), f, indent=2)
@@ -297,6 +306,16 @@ def main():
     print(f"Max valid scenes: {args.max_valid_scenes}")
     print(f"Saving epoch checkpoints every {config.training.save_every_n_epochs} epochs")
     print(f"Using save_dir: {config.training.save_dir}")
+    print(f"Debug CSV log: {debug_log_path}")
+
+    DEBUG.log_debuge_csv(
+        "run_setup",
+        args=vars(args),
+        config=asdict(config),
+        resolved_device=device,
+        save_dir=save_dir,
+        debug_log_path=debug_log_path,
+    )
     
     # TODO: HERE we initilize the model
     if args.model_name == "v1_gs":
@@ -308,6 +327,14 @@ def main():
         ).to(device)
     else:
         raise ValueError(f"Model name '{args.model_name}' not recognized. Please choose a valid model_name argument.")
+
+    total_params, trainable_params = _count_parameters(model)
+    DEBUG.log_debuge_csv(
+        "model_init",
+        model_name=args.model_name,
+        total_params=total_params,
+        trainable_params=trainable_params,
+    )
 
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -336,6 +363,13 @@ def main():
     if args.max_valid_scenes is not None:
         dataset_manager.scenes = dataset_manager.scenes[:args.max_valid_scenes]
         print(f"Using {len(dataset_manager.scenes)} scenes after limiting.")
+    DEBUG.log_debuge_csv(
+        "dataset_ready",
+        data_root=config.data.data_root,
+        scene_scan_enabled=bool(args.enable_scene_scan),
+        num_scenes=len(dataset_manager.scenes),
+        max_valid_scenes=args.max_valid_scenes,
+    )
     dataset = dataset_manager
     loader = DataLoader(
         dataset,
@@ -389,6 +423,8 @@ def main():
 
     #TODO: During loop, we call train_epoch() which will do one epoch of training and return the metrics, loss, etc. We log those to tensorboard and also save checkpoints based on the config settings.
     for ep in range(start_epoch, config.training.epochs):
+        DEBUG.set_context(epoch=ep + 1, phase="train")
+        DEBUG.log_debuge_csv("epoch_start", learning_rate=optimizer.param_groups[0]["lr"])
         stats = train_epoch(
             model=model,
             data_manager=dataset_manager,
@@ -397,6 +433,7 @@ def main():
             device=device,
             config=config,
             output_dir=save_dir,
+            epoch_idx=ep + 1,
         )
 
         current_lr = optimizer.param_groups[0]["lr"]
@@ -423,6 +460,12 @@ def main():
             tb_writer.add_scalar("train/learning_rate", current_lr, ep + 1)
 
         visualize_epoch_outputs(stats, save_dir, ep + 1)
+        DEBUG.log_debuge_csv(
+            "epoch_visualization",
+            epoch=ep + 1,
+            visualization_path=os.path.join(save_dir, f"epoch_{ep + 1}_visualization.png"),
+            epoch_output_dir=os.path.join(save_dir, f"epoch_{ep + 1}_outputs"),
+        )
 
         if (
             config.training.save_every_n_epochs > 0
@@ -440,6 +483,7 @@ def main():
                 config=config,
             )
             print(f"Saved periodic checkpoint: {epoch_ckpt_path}")
+            DEBUG.log_debuge_csv("checkpoint_saved", checkpoint_type="periodic", path=epoch_ckpt_path)
 
         saved_as_best = False
         current_metric = avg_loss
@@ -459,6 +503,7 @@ def main():
             )
             saved_as_best = True
             print(f"New best checkpoint saved at epoch {ep + 1} | loss={best_metric:.6f}")
+            DEBUG.log_debuge_csv("checkpoint_saved", checkpoint_type="best", path=best_ckpt_path, best_metric=best_metric)
 
         with open(csv_log_path, "a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
@@ -479,6 +524,20 @@ def main():
         if scheduler is not None:
             scheduler.step()
 
+        DEBUG.log_debuge_csv(
+            "epoch_end",
+            epoch=ep + 1,
+            loss_total=stats["loss_total"],
+            loss_mse=stats["loss_mse"],
+            loss_l1=stats["loss_l1"],
+            psnr=stats["psnr"],
+            ssim=stats["ssim"],
+            lpips=stats["lpips"],
+            learning_rate=current_lr,
+            num_steps=stats["num_steps"],
+            best_metric=best_metric,
+        )
+
 
 
     #TODO: Finally we save the model as checkpoint
@@ -497,6 +556,8 @@ def main():
         tb_writer.close()
 
     print(f"Final checkpoint saved to: {final_ckpt_path}")
+    DEBUG.log_debuge_csv("checkpoint_saved", checkpoint_type="final", path=final_ckpt_path, best_metric=best_metric)
+    DEBUG.clear_context()
 
 
 

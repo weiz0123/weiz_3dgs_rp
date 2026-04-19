@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from debug_util import DEBUG
 
 class ConvBlock(nn.Module):
     def __init__(self, cin, cout, k=3, s=1, p=1, d=1):
@@ -188,6 +189,23 @@ class DepthAnchoredGaussianHead(nn.Module):
 
         base_means = _depth_to_world_points(depth, intrinsic, extrinsic)
         means3D = base_means.unsqueeze(1) + d_xyz
+
+        if DEBUG.is_first_batch():
+            DEBUG.log_debuge_csv(
+                "gaussian_head_forward",
+                feat=feat,
+                depth=depth,
+                intrinsic=intrinsic,
+                extrinsic=extrinsic,
+                conf=conf,
+                base_means=base_means,
+                d_xyz=d_xyz,
+                scales=scales,
+                quat=quat,
+                opacity=opacity,
+                sh_coeffs=sh_coeffs,
+                means3D=means3D,
+            )
 
         return {
             "means3D": means3D,

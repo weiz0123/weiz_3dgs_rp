@@ -5,6 +5,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
+from debug_util import DEBUG
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from eval_metrics_v1 import compute_psnr, compute_ssim, compute_lpips
 
@@ -102,6 +103,10 @@ def get_projection_matrix(znear, zfar, fovX, fovY, device):
     P[2, 3] = -(zfar * znear) / (zfar - znear)
     return P
 
+
+def _non_black_fraction(image, threshold=1e-4):
+    return (image.detach() > threshold).any(dim=0).float().mean().item()
+
 def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, target_extrinsic, target_intrinsic, H, W, sh_degree):
     device = source_extrinsics.device
 
@@ -162,6 +167,18 @@ def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, targe
     # SH Coeffs: [V, S, 3, SH, H, W] -> [N, SH, 3]
     shs = sh_out.permute(0, 1, 4, 5, 3, 2).reshape(-1, sh_out.shape[3], 3)
 
+    if DEBUG.is_first_batch():
+        DEBUG.log_debuge_csv(
+            "render_scene_inputs",
+            means3D=means3D,
+            opacity=opacity,
+            scales=scales,
+            rotations=rotations,
+            shs=shs,
+            target_intrinsic=target_intrinsic,
+            target_extrinsic=target_extrinsic,
+        )
+
     # --- 3. Compute View-Specific Parameters ---
     K = _to_pixel_intrinsics(target_intrinsic[0], H, W)
     target_w2c = torch.inverse(_to_homogeneous_4x4(target_extrinsic[0]))
@@ -215,12 +232,20 @@ def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, targe
         rotations = rotations,
         cov3D_precomp = None
     )
+
+    if DEBUG.is_first_batch():
+        DEBUG.log_debuge_csv(
+            "render_scene_outputs",
+            rendered_image=rendered_image,
+            radii=radii,
+            non_black_fraction=_non_black_fraction(rendered_image),
+        )
     
     return rendered_image
 
 
 
-def train_epoch(model, data_manager, dataloader, optimizer, device, config=None, output_dir=None):
+def train_epoch(model, data_manager, dataloader, optimizer, device, config=None, output_dir=None, epoch_idx=None):
     model.train()
 
     total_loss = 0.0
@@ -240,9 +265,38 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
             "timestamps": batch["timestamps"][0],
         }
 
+        DEBUG.set_context(
+            epoch=epoch_idx,
+            batch_idx=steps,
+            scene=str(scene["scene"]),
+            phase="train",
+        )
+        DEBUG.log_debuge_csv(
+            "scene_batch",
+            scene_name=str(scene["scene"]),
+            num_images=scene["images"].shape[0],
+            intrinsics=scene["intrinsics"],
+            poses=scene["poses"],
+            timestamps=scene["timestamps"],
+        )
+
         training_data = data_manager.build_training_data(
             scene,
             config.data.n_input_views,
+        )
+
+        DEBUG.log_debuge_csv(
+            "training_data",
+            target_idx=training_data["target_idx"],
+            train_indices=training_data["train_indices"],
+            train_indices_before=training_data["train_indices_before"],
+            train_indices_after=training_data["train_indices_after"],
+            train_images=training_data["train_images"],
+            target_image=training_data["target_image"],
+            train_intrinsics=training_data["train_intrinsics"],
+            target_intrinsics=training_data["target_intrinsics"],
+            train_poses=training_data["train_poses"],
+            target_pose=training_data["target_pose"],
         )
 
         inputs = training_data["train_images"].to(device)
@@ -277,6 +331,19 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         estimated_extrinsics = model_outputs["estimated_extrinsics"]
         estimated_intrinsics = model_outputs["estimated_intrinsics"]
 
+        if DEBUG.is_first_batch():
+            DEBUG.log_debuge_csv(
+                "model_outputs",
+                dino_features=dino_feat,
+                fused_map=fused_map,
+                vggt_depth=vggt_depth,
+                depth_low=depth_low,
+                conf_low=conf_low,
+                gaussian_outputs=gaussian_head,
+                estimated_extrinsics=estimated_extrinsics,
+                estimated_intrinsics=estimated_intrinsics,
+            )
+
        
         # Loss Computation:
         mse_loss = torch.nn.functional.mse_loss(
@@ -302,6 +369,19 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         total_ssim += float(ssim)
         total_lpips += float(lpips)
         steps += 1
+
+        DEBUG.log_debuge_csv(
+            "batch_metrics",
+            loss_total=total_batch_loss.item(),
+            loss_mse=mse_loss.item(),
+            loss_l1=mae_loss.item(),
+            psnr=float(psnr),
+            ssim=float(ssim),
+            lpips=float(lpips),
+            estimated_image=estimated_image,
+            target_image=target_image,
+            non_black_fraction=_non_black_fraction(estimated_image),
+        )
 
     steps = max(steps, 1)
     return {

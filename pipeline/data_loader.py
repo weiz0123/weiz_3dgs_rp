@@ -7,6 +7,8 @@ import numpy as np
 import random
 from tqdm import tqdm
 
+from debug_util import DEBUG
+
 '''
 Dataset Loader
 '''
@@ -95,6 +97,14 @@ class RealEstate10KDataset(Dataset):
 
         self.scenes = kept_scenes
         self.filtered_out_scenes = skipped_scenes
+        DEBUG.log_debuge_csv(
+            "filter_re10k_scenes",
+            data_root=str(data_root),
+            min_required_frames=min_required_frames,
+            kept_scene_count=len(kept_scenes),
+            skipped_scene_count=len(skipped_scenes),
+            skipped_preview=[(str(path), reason) for path, reason in skipped_scenes[:10]],
+        )
         return self
 
 
@@ -148,7 +158,7 @@ class RealEstate10KDataset(Dataset):
         selected_after = sorted(random.sample(after_candidates, after_quota))
         train_indices = selected_before + selected_after
 
-        return {
+        training_data = {
             "scene": scene["scene"],
             "num_frames": num_frames,
             "target_idx": target_idx,
@@ -167,6 +177,17 @@ class RealEstate10KDataset(Dataset):
             "train_poses": poses[train_indices],
             "train_timestamps": timestamps[train_indices],
         }
+        DEBUG.log_debuge_csv(
+            "build_training_data",
+            scene=str(scene["scene"]),
+            num_frames=num_frames,
+            target_idx=target_idx,
+            train_indices=train_indices,
+            num_input_views=num_input_views,
+            num_before_target=before_quota,
+            num_after_target=after_quota,
+        )
+        return training_data
 
 
     def format_matrix_text(self, name, matrix):

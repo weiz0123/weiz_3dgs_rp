@@ -8,6 +8,7 @@ from configs.re10k_experiment import (
     _import_vggt_class,
     _resolve_cache_root,
 )
+from debug_util import DEBUG
 from vggt.utils.pose_enc import pose_encoding_to_extri_intri
 
 
@@ -123,6 +124,18 @@ class V1VGGTEncoder(nn.Module):
         if not self._vggt_has_trainable_params:
             vggt.eval()
 
+        total_params = sum(param.numel() for param in vggt.parameters())
+        trainable_params = sum(param.numel() for param in vggt.parameters() if param.requires_grad)
+        DEBUG.log_debuge_csv(
+            "vggt_build",
+            freeze_vggt=self.config.model.freeze_vggt,
+            vggt_unfreeze_heads=self.config.model.vggt_unfreeze_heads,
+            vggt_unfreeze_last_blocks=self.config.model.vggt_unfreeze_last_blocks,
+            total_params=total_params,
+            trainable_params=trainable_params,
+            has_trainable_params=self._vggt_has_trainable_params,
+        )
+
         return vggt
 
     def forward(self, inputs):
@@ -144,6 +157,18 @@ class V1VGGTEncoder(nn.Module):
 
         depth_all = depth_all.permute(0, 1, 4, 2, 3).contiguous()
         depth_all = _crop_predictions_to_original(depth_all, original_hw)
+
+        if DEBUG.is_first_batch():
+            DEBUG.log_debuge_csv(
+                "vggt_forward",
+                inputs=inputs,
+                padded_inputs=imgs_for_vggt,
+                tokens=tokens,
+                depth=depth_all,
+                estimated_extrinsics=extrinsic_all,
+                estimated_intrinsics=intrinsic_all,
+                original_hw=original_hw,
+            )
 
         return {
             "tokens": tokens,

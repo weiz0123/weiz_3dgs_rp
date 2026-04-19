@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from transformers import AutoImageProcessor, AutoModel
 
+from debug_util import DEBUG
 
 class DinoV3DenseEncoder(nn.Module):
     def __init__(self, model_name="facebook/dinov3-vit7b16-pretrain-lvd1689m", freeze=True):
@@ -72,5 +73,16 @@ class DinoV3DenseEncoder(nn.Module):
         if is_multiview:
             features = features.reshape(batch_size, num_views, channels, grid_h, grid_w)
             cls_token = cls_token.reshape(batch_size, num_views, channels)
+
+        if DEBUG.is_first_batch():
+            DEBUG.log_debuge_csv(
+                "dino_forward",
+                is_multiview=is_multiview,
+                normalized_input=x,
+                features=features,
+                cls_token=cls_token,
+                patch_size=self.patch_size,
+                num_register_tokens=self.num_register_tokens,
+            )
 
         return features, cls_token

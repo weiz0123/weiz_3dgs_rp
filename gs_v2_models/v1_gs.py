@@ -2,6 +2,7 @@ import torch.nn.functional as F
 import torch
 import torch.nn as nn
 
+from debug_util import DEBUG
 from .dense_transformer import CrossAttention, DenseFusionTransformer, SelfAttention
 from .v1_dino_encoder import DinoV3DenseEncoder
 from .v1_vggt_encoder import V1VGGTEncoder
@@ -143,6 +144,23 @@ class V1GSModel(nn.Module):
                 extrinsic=flat_extrinsics,
                 conf=conf_full,
                 output_size=(height, width),
+            )
+
+        if DEBUG.is_first_batch():
+            DEBUG.log_debuge_csv(
+                "v1_gs_forward",
+                inputs=inputs,
+                dino_features=dino_features,
+                flat_features=flat_features,
+                depth_all=depth_all,
+                flat_depth=flat_depth,
+                flat_intrinsics=flat_intrinsics,
+                flat_extrinsics=flat_extrinsics,
+                depth_low=depth_low,
+                conf_low=conf_low,
+                gaussian_means=outputs.get("means3D"),
+                gaussian_scales=outputs.get("scales"),
+                gaussian_opacity=outputs.get("opacity"),
             )
 
         
