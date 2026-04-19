@@ -69,7 +69,12 @@ class V1GSModel(nn.Module):
             init_dc_bias=0.5,
             )
 
-    def forward(self, inputs):
+    def forward(
+        self,
+        inputs,
+        train_intrinsics=None,
+        train_poses=None,
+    ):
         if inputs.ndim == 4:
             inputs = inputs.unsqueeze(0)
 
@@ -85,6 +90,14 @@ class V1GSModel(nn.Module):
                 f"Expected training images with {self.num_view} RGB views, but got {tuple(inputs.shape)}"
             )
 
+        if train_intrinsics is None or train_poses is None:
+            raise ValueError("train_intrinsics and train_poses must be provided for GT-camera lifting")
+
+        if train_intrinsics.ndim == 3:
+            train_intrinsics = train_intrinsics.unsqueeze(0)
+        if train_poses.ndim == 3:
+            train_poses = train_poses.unsqueeze(0)
+
         # DINO features
         dino_features, _ = self.dino(inputs)
         feat_h, feat_w = dino_features.shape[-2:]
@@ -93,11 +106,13 @@ class V1GSModel(nn.Module):
         # VGGT outputs
         vggt_outputs = self.vggt(inputs)
         depth_all = vggt_outputs["depth"]
-        extrinsic_all = vggt_outputs["estimated_extrinsics"]
-        intrinsic_all = vggt_outputs["estimated_intrinsics"]
+        extrinsic_all = vggt_outputs["estimated_extrinsics"] # not used currently
+        intrinsic_all = vggt_outputs["estimated_intrinsics"] # not used currently
+
         flat_depth = depth_all.reshape(batch_size * num_view, 1, height, width)
-        flat_extrinsics = extrinsic_all.reshape(batch_size * num_view, extrinsic_all.shape[-2], extrinsic_all.shape[-1])
-        flat_intrinsics = intrinsic_all.reshape(batch_size * num_view, 3, 3)
+        train_w2c = torch.inverse(train_poses)
+        flat_extrinsics = train_w2c.reshape(batch_size * num_view, train_w2c.shape[-2], train_w2c.shape[-1])
+        flat_intrinsics = train_intrinsics.reshape(batch_size * num_view, 3, 3)
 
         depth_low = F.interpolate(
             flat_depth,

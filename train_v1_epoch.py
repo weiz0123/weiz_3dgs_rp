@@ -249,7 +249,11 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         target_image = training_data["target_image"].to(device)
 
         optimizer.zero_grad(set_to_none=True)
-        model_outputs = model(inputs)
+        model_outputs = model(
+            inputs,
+            train_intrinsics=training_data["train_intrinsics"].to(device),
+            train_poses=training_data["train_poses"].to(device),
+        )
 
         gaussian_head = model_outputs["guaussian_outputs"]
         dino_feat  = model_outputs["features"]

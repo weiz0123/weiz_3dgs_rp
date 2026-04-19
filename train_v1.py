@@ -302,7 +302,7 @@ def main():
     if args.model_name == "v1_gs":
         model = V1GSModel(
             num_view=config.data.n_input_views,
-            sh_degree=0,
+            sh_degree=2,
             gaussian_per_pixel=1,
             config=config
         ).to(device)
