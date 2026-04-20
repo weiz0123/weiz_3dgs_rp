@@ -75,7 +75,7 @@ def _normalize_confidence(conf):
     conf_max = float(conf.detach().amax())
     if conf_min < 0.0 or conf_max > 1.0:
         conf = torch.sigmoid(conf)
-    return conf.clamp_(0.0, 1.0)
+    return conf.clamp(0.0, 1.0)
 
 
 def _relative_depth_gradient(depth):
@@ -173,7 +173,7 @@ class DepthAnchoredGaussianHead(nn.Module):
         valid_depth = ((depth > 1e-6) & torch.isfinite(depth)).to(raw.dtype)
         depth = torch.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
         depth_edge = _relative_depth_gradient(depth)
-        edge_gate = torch.exp(-4.0 * depth_edge).clamp_(0.05, 1.0)
+        edge_gate = torch.exp(-4.0 * depth_edge).clamp(0.05, 1.0)
 
         if conf is not None:
             conf = _normalize_confidence(conf.to(raw.dtype))
