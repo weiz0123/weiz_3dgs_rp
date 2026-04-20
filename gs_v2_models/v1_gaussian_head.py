@@ -168,9 +168,11 @@ class DepthAnchoredGaussianHead(nn.Module):
         cursor += 1
         sh_raw = raw[:, :, cursor:cursor + self.sh_out_dim]
 
-        valid_depth = ((depth > 1e-6) & torch.isfinite(depth)).to(raw.dtype)
+        finite_depth = torch.isfinite(depth).to(raw.dtype)
         depth = torch.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
-        depth_edge = _relative_depth_gradient(depth)
+        depth_for_points = depth.clamp_min(1e-3)
+        depth_positive_gate = torch.sigmoid(50.0 * (depth - 1e-3))
+        depth_edge = _relative_depth_gradient(depth_for_points)
         edge_gate = (0.5 + 0.5 * torch.exp(-2.0 * depth_edge)).clamp(0.5, 1.0)
 
         if conf is not None:
@@ -178,12 +180,13 @@ class DepthAnchoredGaussianHead(nn.Module):
         else:
             conf = torch.ones_like(depth, dtype=raw.dtype)
 
-        valid_expanded = valid_depth.unsqueeze(1)
+        valid_expanded = finite_depth.unsqueeze(1)
+        depth_positive_expanded = depth_positive_gate.unsqueeze(1)
         conf_gate = (0.35 + 0.65 * conf).unsqueeze(1)
         edge_expanded = edge_gate.unsqueeze(1)
 
-        offset_gate = valid_expanded * conf_gate * edge_expanded
-        opacity_gate = valid_expanded * conf_gate
+        offset_gate = valid_expanded * conf_gate * edge_expanded * depth_positive_expanded
+        opacity_gate = valid_expanded * conf_gate * (0.25 + 0.75 * depth_positive_expanded)
         scale_gate = 0.75 + 0.25 * conf_gate
 
         d_xyz = 0.001 * torch.tanh(dxyz_raw) * offset_gate
@@ -201,7 +204,7 @@ class DepthAnchoredGaussianHead(nn.Module):
             width,
         )
 
-        base_means = _depth_to_world_points(depth, intrinsic, extrinsic)
+        base_means = _depth_to_world_points(depth_for_points, intrinsic, extrinsic)
         means3D = base_means.unsqueeze(1) + d_xyz
 
         if DEBUG.is_first_batch():
@@ -209,10 +212,12 @@ class DepthAnchoredGaussianHead(nn.Module):
                 "gaussian_head_forward",
                 feat=feat,
                 depth=depth,
+                depth_for_points=depth_for_points,
                 intrinsic=intrinsic,
                 extrinsic=extrinsic,
                 conf=conf,
-                valid_depth=valid_depth,
+                finite_depth=finite_depth,
+                depth_positive_gate=depth_positive_gate,
                 depth_edge=depth_edge,
                 edge_gate=edge_gate,
                 conf_gate=conf_gate,

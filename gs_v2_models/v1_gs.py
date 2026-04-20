@@ -112,8 +112,8 @@ class V1GSModel(nn.Module):
         extrinsic_all = vggt_outputs["estimated_extrinsics"] # not used currently
         intrinsic_all = vggt_outputs["estimated_intrinsics"] # not used currently
 
-        flat_depth = depth_all.reshape(batch_size * num_view, 1, height, width)
-        flat_depth_conf = depth_conf_all.reshape(batch_size * num_view, 1, height, width)
+        flat_depth = depth_all.reshape(batch_size * num_view, 1, height, width).detach()
+        flat_depth_conf = depth_conf_all.reshape(batch_size * num_view, 1, height, width).detach()
         train_w2c = torch.inverse(train_poses)
         flat_extrinsics = train_w2c.reshape(batch_size * num_view, train_w2c.shape[-2], train_w2c.shape[-1])
         flat_intrinsics = train_intrinsics.reshape(batch_size * num_view, 3, 3)
