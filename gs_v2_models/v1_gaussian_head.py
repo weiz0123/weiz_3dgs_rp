@@ -51,26 +51,39 @@ def _depth_to_world_points(depth, intrinsic, extrinsic):
     pixels = torch.stack([x, y, torch.ones_like(x)], dim=0).reshape(1, 3, h * w)
     pixels = pixels.expand(n, -1, -1)
 
-    inv_k = torch.inverse(intrinsic)
-    cam_points = inv_k @ pixels
+    cam_points = torch.linalg.solve(intrinsic, pixels)
     cam_points = cam_points * depth.reshape(n, 1, h * w)
 
-    cam_points_homo = torch.cat(
-        [cam_points, torch.ones(n, 1, h * w, device=device, dtype=dtype)],
-        dim=1,
-    )
     extrinsic = extrinsic.to(dtype)
     if extrinsic.shape[-2:] == (3, 4):
-        extrinsic_h = torch.zeros(n, 4, 4, device=device, dtype=dtype)
-        extrinsic_h[:, :3, :4] = extrinsic
-        extrinsic_h[:, 3, 3] = 1.0
-        extrinsic = extrinsic_h
+        rotation = extrinsic[:, :3, :3]
+        translation = extrinsic[:, :3, 3:].contiguous()
     elif extrinsic.shape[-2:] != (4, 4):
         raise ValueError(f"Expected extrinsic shape [N,3,4] or [N,4,4], got {tuple(extrinsic.shape)}")
+    else:
+        rotation = extrinsic[:, :3, :3]
+        translation = extrinsic[:, :3, 3:].contiguous()
 
-    inv_e = torch.inverse(extrinsic)
-    world_points = inv_e @ cam_points_homo
-    return world_points[:, :3, :].reshape(n, 3, h, w)
+    cam_to_world = rotation.transpose(1, 2)
+    world_points = cam_to_world @ (cam_points - translation)
+    return world_points.reshape(n, 3, h, w)
+
+
+def _normalize_confidence(conf):
+    conf = torch.nan_to_num(conf, nan=0.0, posinf=0.0, neginf=0.0)
+    conf_min = float(conf.detach().amin())
+    conf_max = float(conf.detach().amax())
+    if conf_min < 0.0 or conf_max > 1.0:
+        conf = torch.sigmoid(conf)
+    return conf.clamp_(0.0, 1.0)
+
+
+def _relative_depth_gradient(depth):
+    depth = torch.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
+    depth_safe = depth.clamp_min(1e-6)
+    grad_x = F.pad(torch.abs(depth[:, :, :, 1:] - depth[:, :, :, :-1]), (1, 0, 0, 0))
+    grad_y = F.pad(torch.abs(depth[:, :, 1:, :] - depth[:, :, :-1, :]), (0, 0, 1, 0))
+    return torch.maximum(grad_x, grad_y) / depth_safe
 
 
 class DepthAnchoredGaussianHead(nn.Module):
@@ -118,10 +131,6 @@ class DepthAnchoredGaussianHead(nn.Module):
             ConvBlock(hidden, hidden, p=4, d=4),
             ConvBlock(hidden, hidden, p=1, d=1),
         )
-        self.upsample_refine = nn.Sequential(
-            ConvBlock(hidden, hidden, p=1, d=1),
-            ConvBlock(hidden, hidden, p=1, d=1),
-        )
         self.out = nn.Conv2d(hidden, out_dim, 1)
         self._init_output_layer()
 
@@ -132,25 +141,19 @@ class DepthAnchoredGaussianHead(nn.Module):
         with torch.no_grad():
             for surface_idx in range(self.num_surfaces):
                 base = surface_idx * self.per_surface_dim
+                scale_base = base + 3
+                self.out.bias[scale_base:scale_base + 3] = -1.0
                 quat_base = base + 6
                 self.out.bias[quat_base] = 1.0
                 opacity_base = base + 10
-                self.out.bias[opacity_base] = -2.0
+                self.out.bias[opacity_base] = -2.5
                 sh_base = base + 11  # 3 dxyz + 3 scale + 4 quat + 1 opacity
                 for color_idx in range(3):
                     dc_index = sh_base + color_idx * self.sh_coeff_dim
                     self.out.bias[dc_index] = self.init_dc_bias
 
-    def forward(self, feat, depth, intrinsic, extrinsic, conf=None, output_size=None):
+    def forward(self, feat, depth, intrinsic, extrinsic, conf=None):
         h = self.net(feat)
-
-        if output_size is not None and h.shape[-2:] != output_size:
-            h = F.interpolate(h, size=output_size, mode="bilinear", align_corners=False)
-            h = self.upsample_refine(h)
-            if depth.shape[-2:] != output_size:
-                depth = F.interpolate(depth, size=output_size, mode="bilinear", align_corners=False)
-            if conf is not None and conf.shape[-2:] != output_size:
-                conf = F.interpolate(conf, size=output_size, mode="bilinear", align_corners=False)
 
         raw = self.out(h)
         batch_size, _, height, width = raw.shape
@@ -167,18 +170,24 @@ class DepthAnchoredGaussianHead(nn.Module):
         cursor += 1
         sh_raw = raw[:, :, cursor:cursor + self.sh_out_dim]
 
-        d_xyz = 0.002 * torch.tanh(dxyz_raw)
-        base_scales = torch.exp(s_raw - 6.0).clamp(min=self.min_scale, max=self.max_scale)
-        quat = F.normalize(q_raw, dim=2, eps=1e-6)
-        opacity = torch.sigmoid(a_raw)
+        valid_depth = ((depth > 1e-6) & torch.isfinite(depth)).to(raw.dtype)
+        depth = torch.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
+        depth_edge = _relative_depth_gradient(depth)
+        edge_gate = torch.exp(-4.0 * depth_edge).clamp_(0.05, 1.0)
 
         if conf is not None:
-            conf = conf.to(raw.dtype)
-            conf_expanded = conf.unsqueeze(1)
-            scales = base_scales * (0.1 + 0.9 * conf_expanded)
-            opacity = opacity * (0.1 + 0.9 * conf_expanded)
+            conf = _normalize_confidence(conf.to(raw.dtype))
         else:
-            scales = base_scales
+            conf = torch.ones_like(depth, dtype=raw.dtype)
+
+        support_gate = valid_depth * edge_gate * (0.15 + 0.85 * conf)
+        support_expanded = support_gate.unsqueeze(1)
+
+        d_xyz = 0.001 * torch.tanh(dxyz_raw) * support_expanded
+        base_scales = torch.exp(s_raw - 6.0).clamp(min=self.min_scale, max=self.max_scale)
+        quat = F.normalize(q_raw, dim=2, eps=1e-6)
+        opacity = torch.sigmoid(a_raw) * support_expanded
+        scales = base_scales * (0.25 + 0.75 * support_expanded)
 
         sh_coeffs = sh_raw.view(
             batch_size,
@@ -200,6 +209,10 @@ class DepthAnchoredGaussianHead(nn.Module):
                 intrinsic=intrinsic,
                 extrinsic=extrinsic,
                 conf=conf,
+                valid_depth=valid_depth,
+                depth_edge=depth_edge,
+                edge_gate=edge_gate,
+                support_gate=support_gate,
                 base_means=base_means,
                 d_xyz=d_xyz,
                 scales=scales,
