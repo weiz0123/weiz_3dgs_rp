@@ -411,6 +411,10 @@ def main():
                 "avg_loss",
                 "avg_mse",
                 "avg_l1",
+                "avg_ssim_loss",
+                "avg_gradient_loss",
+                "avg_scale_reg",
+                "avg_opacity_reg",
                 "psnr",
                 "ssim",
                 "lpips",
@@ -444,6 +448,8 @@ def main():
             f"loss={stats['loss_total']:.6f} "
             f"mse={stats['loss_mse']:.6f} "
             f"l1={stats['loss_l1']:.6f} "
+            f"ssim_loss={stats['loss_ssim']:.6f} "
+            f"grad={stats['loss_gradient']:.6f} "
             f"psnr={stats['psnr']:.6f} "
             f"ssim={stats['ssim']:.6f} "
             f"lpips={stats['lpips']:.6f} "
@@ -454,6 +460,10 @@ def main():
             tb_writer.add_scalar("train/loss_total", stats["loss_total"], ep + 1)
             tb_writer.add_scalar("train/loss_mse", stats["loss_mse"], ep + 1)
             tb_writer.add_scalar("train/loss_l1", stats["loss_l1"], ep + 1)
+            tb_writer.add_scalar("train/loss_ssim", stats["loss_ssim"], ep + 1)
+            tb_writer.add_scalar("train/loss_gradient", stats["loss_gradient"], ep + 1)
+            tb_writer.add_scalar("train/loss_scale_reg", stats["loss_scale_reg"], ep + 1)
+            tb_writer.add_scalar("train/loss_opacity_reg", stats["loss_opacity_reg"], ep + 1)
             tb_writer.add_scalar("train/psnr", stats["psnr"], ep + 1)
             tb_writer.add_scalar("train/ssim", stats["ssim"], ep + 1)
             tb_writer.add_scalar("train/lpips", stats["lpips"], ep + 1)
@@ -512,6 +522,10 @@ def main():
                 stats["loss_total"],
                 stats["loss_mse"],
                 stats["loss_l1"],
+                stats["loss_ssim"],
+                stats["loss_gradient"],
+                stats["loss_scale_reg"],
+                stats["loss_opacity_reg"],
                 stats["psnr"],
                 stats["ssim"],
                 stats["lpips"],
@@ -530,6 +544,10 @@ def main():
             loss_total=stats["loss_total"],
             loss_mse=stats["loss_mse"],
             loss_l1=stats["loss_l1"],
+            loss_ssim=stats["loss_ssim"],
+            loss_gradient=stats["loss_gradient"],
+            loss_scale_reg=stats["loss_scale_reg"],
+            loss_opacity_reg=stats["loss_opacity_reg"],
             psnr=stats["psnr"],
             ssim=stats["ssim"],
             lpips=stats["lpips"],

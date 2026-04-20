@@ -3,6 +3,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import torch.nn.functional as F
 from tqdm import tqdm
 
 from debug_util import DEBUG
@@ -107,7 +108,56 @@ def get_projection_matrix(znear, zfar, fovX, fovY, device):
 def _non_black_fraction(image, threshold=1e-4):
     return (image.detach() > threshold).any(dim=0).float().mean().item()
 
-def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, target_extrinsic, target_intrinsic, H, W, sh_degree):
+
+def _simple_ssim(x, y, c1=0.01**2, c2=0.03**2):
+    mu_x = F.avg_pool2d(x, 3, 1, 1)
+    mu_y = F.avg_pool2d(y, 3, 1, 1)
+
+    sigma_x = F.avg_pool2d(x * x, 3, 1, 1) - mu_x * mu_x
+    sigma_y = F.avg_pool2d(y * y, 3, 1, 1) - mu_y * mu_y
+    sigma_xy = F.avg_pool2d(x * y, 3, 1, 1) - mu_x * mu_y
+
+    ssim_map = ((2 * mu_x * mu_y + c1) * (2 * sigma_xy + c2)) / (
+        (mu_x * mu_x + mu_y * mu_y + c1) * (sigma_x + sigma_y + c2)
+    )
+    return ssim_map.mean()
+
+
+def _image_gradient_loss(pred, target):
+    pred_b = pred.unsqueeze(0)
+    target_b = target.unsqueeze(0)
+
+    pred_dx = pred_b[:, :, :, 1:] - pred_b[:, :, :, :-1]
+    pred_dy = pred_b[:, :, 1:, :] - pred_b[:, :, :-1, :]
+    target_dx = target_b[:, :, :, 1:] - target_b[:, :, :, :-1]
+    target_dy = target_b[:, :, 1:, :] - target_b[:, :, :-1, :]
+
+    loss_x = torch.abs(pred_dx - target_dx).mean()
+    loss_y = torch.abs(pred_dy - target_dy).mean()
+    return loss_x + loss_y
+
+
+def _gaussian_regularizers(outputs):
+    scales = outputs["scales"]
+    opacity = outputs["opacity"]
+
+    scale_reg = (scales ** 2).mean()
+    opacity_reg = opacity.mean()
+    return scale_reg, opacity_reg
+
+
+def render_scene(
+    outputs,
+    depth_all,
+    source_extrinsics,
+    source_intrinsics,
+    target_extrinsic,
+    target_intrinsic,
+    H,
+    W,
+    sh_degree,
+    config=None,
+):
     device = source_extrinsics.device
 
     d_xyz = outputs["d_xyz"]
@@ -166,6 +216,41 @@ def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, targe
     rotations = quat_out.reshape(-1, 4)
     # SH Coeffs: [V, S, 3, SH, H, W] -> [N, SH, 3]
     shs = sh_out.permute(0, 1, 4, 5, 3, 2).reshape(-1, sh_out.shape[3], 3)
+    num_gaussians_total = int(means3D.shape[0])
+
+    opacity_threshold = 0.0
+    topk_gaussians = None
+    if config is not None:
+        opacity_threshold = float(getattr(config.training, "render_opacity_threshold", 0.0))
+        topk_gaussians = getattr(config.training, "render_topk_gaussians", None)
+
+    keep_mask = torch.ones(num_gaussians_total, dtype=torch.bool, device=device)
+    if opacity_threshold > 0.0:
+        keep_mask = opacity.squeeze(-1) > opacity_threshold
+
+    if keep_mask.sum().item() == 0:
+        keep_mask = torch.ones_like(keep_mask)
+
+    if topk_gaussians is not None and keep_mask.sum().item() > int(topk_gaussians):
+        keep_indices = keep_mask.nonzero(as_tuple=False).squeeze(-1)
+        keep_opacity = opacity.squeeze(-1)[keep_indices]
+        _, top_local = torch.topk(
+            keep_opacity,
+            k=int(topk_gaussians),
+            largest=True,
+            sorted=False,
+        )
+        top_indices = keep_indices[top_local]
+        top_mask = torch.zeros_like(keep_mask)
+        top_mask[top_indices] = True
+        keep_mask = top_mask
+
+    means3D = means3D[keep_mask]
+    opacity = opacity[keep_mask]
+    scales = scales[keep_mask]
+    rotations = rotations[keep_mask]
+    shs = shs[keep_mask]
+    num_gaussians_kept = int(means3D.shape[0])
 
     if DEBUG.is_first_batch():
         DEBUG.log_debuge_csv(
@@ -175,6 +260,8 @@ def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, targe
             scales=scales,
             rotations=rotations,
             shs=shs,
+            num_gaussians_total=num_gaussians_total,
+            num_gaussians_kept=num_gaussians_kept,
             target_intrinsic=target_intrinsic,
             target_extrinsic=target_extrinsic,
         )
@@ -240,6 +327,8 @@ def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, targe
             "render_scene_outputs",
             rendered_image=rendered_image,
             radii=radii,
+            num_gaussians_total=num_gaussians_total,
+            num_gaussians_kept=num_gaussians_kept,
             non_black_fraction=non_black_fraction,
         )
 
@@ -251,6 +340,8 @@ def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, targe
             scales=scales,
             rotations=rotations,
             shs=shs,
+            num_gaussians_total=num_gaussians_total,
+            num_gaussians_kept=num_gaussians_kept,
             target_intrinsic=target_intrinsic,
             target_extrinsic=target_extrinsic,
         )
@@ -265,6 +356,10 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
     total_loss = 0.0
     total_mse = 0.0
     total_l1 = 0.0
+    total_ssim_loss = 0.0
+    total_gradient_loss = 0.0
+    total_scale_reg = 0.0
+    total_opacity_reg = 0.0
     total_psnr = 0.0
     total_ssim = 0.0
     total_lpips = 0.0
@@ -341,6 +436,7 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
             H=inputs.shape[-2],
             W=inputs.shape[-1],
             sh_degree=gaussian_head["sh_degree"],
+            config=config,
         )
         estimated_extrinsics = model_outputs["estimated_extrinsics"]
         estimated_intrinsics = model_outputs["estimated_intrinsics"]
@@ -368,7 +464,26 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
             estimated_image,
             target_image,
         )
-        total_batch_loss = mse_loss + mae_loss
+        ssim_loss = 1.0 - _simple_ssim(
+            estimated_image.unsqueeze(0),
+            target_image.unsqueeze(0),
+        )
+        gradient_loss = _image_gradient_loss(estimated_image, target_image)
+        scale_reg, opacity_reg = _gaussian_regularizers(gaussian_head)
+
+        lambda_ssim = float(getattr(config.training, "lambda_ssim", 0.2)) if config is not None else 0.2
+        lambda_gradient = float(getattr(config.training, "lambda_gradient", 0.1)) if config is not None else 0.1
+        lambda_scale_reg = float(getattr(config.training, "lambda_scale_reg", 1e-4)) if config is not None else 1e-4
+        lambda_opacity_reg = float(getattr(config.training, "lambda_opacity_reg", 5e-5)) if config is not None else 5e-5
+
+        total_batch_loss = (
+            mse_loss
+            + mae_loss
+            + lambda_ssim * ssim_loss
+            + lambda_gradient * gradient_loss
+            + lambda_scale_reg * scale_reg
+            + lambda_opacity_reg * opacity_reg
+        )
         total_batch_loss.backward()
         optimizer.step()
 
@@ -379,6 +494,10 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         total_loss += total_batch_loss.item()
         total_mse += mse_loss.item()
         total_l1 += mae_loss.item()
+        total_ssim_loss += ssim_loss.item()
+        total_gradient_loss += gradient_loss.item()
+        total_scale_reg += scale_reg.item()
+        total_opacity_reg += opacity_reg.item()
         total_psnr += float(psnr)
         total_ssim += float(ssim)
         total_lpips += float(lpips)
@@ -389,6 +508,10 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
             loss_total=total_batch_loss.item(),
             loss_mse=mse_loss.item(),
             loss_l1=mae_loss.item(),
+            loss_ssim=ssim_loss.item(),
+            loss_gradient=gradient_loss.item(),
+            loss_scale_reg=scale_reg.item(),
+            loss_opacity_reg=opacity_reg.item(),
             psnr=float(psnr),
             ssim=float(ssim),
             lpips=float(lpips),
@@ -414,6 +537,10 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         "loss_total": total_loss / steps,
         "loss_mse": total_mse / steps,
         "loss_l1": total_l1 / steps,
+        "loss_ssim": total_ssim_loss / steps,
+        "loss_gradient": total_gradient_loss / steps,
+        "loss_scale_reg": total_scale_reg / steps,
+        "loss_opacity_reg": total_opacity_reg / steps,
         "psnr": total_psnr / steps,
         "ssim": total_ssim / steps,
         "lpips": total_lpips / steps,
