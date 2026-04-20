@@ -21,9 +21,25 @@ class RealEstate10KDataset(Dataset):
         self.root = Path(root)
         self.scenes = sorted((self.root / "scenes").glob("*"))
         self.transform = transform
+        self.freeze_view_sampling = False
+        self.fixed_target_idx = None
+        self.fixed_train_indices = None
+        self._cached_training_cases = {}
 
         if len(self.scenes) == 0:
             raise RuntimeError(f"No scenes found in {self.root}")
+
+    def configure_training_case(
+        self,
+        freeze_view_sampling=False,
+        fixed_target_idx=None,
+        fixed_train_indices=None,
+    ):
+        self.freeze_view_sampling = bool(freeze_view_sampling)
+        self.fixed_target_idx = fixed_target_idx
+        self.fixed_train_indices = None if fixed_train_indices is None else list(fixed_train_indices)
+        self._cached_training_cases = {}
+        return self
 
 
     def filter_re10k_scenes(self, data_root, num_view):
@@ -108,25 +124,33 @@ class RealEstate10KDataset(Dataset):
         return self
 
 
-    def build_training_data(self, scene, num_input_views):
-        """
-        Split a loaded scene into:
-          - one randomly selected target frame
-          - num_input_views randomly sampled training frames from both
-            before and after the target so the target stays temporally
-            in the middle of the selected context
-        """
-        images = scene["images"]
-        intrinsics = scene["intrinsics"]
-        poses = scene["poses"]
-        timestamps = scene["timestamps"]
+    def _sample_training_indices(
+        self,
+        num_frames,
+        num_input_views,
+        fixed_target_idx=None,
+        fixed_train_indices=None,
+    ):
+        if fixed_train_indices is not None and fixed_target_idx is None:
+            raise ValueError("fixed_train_indices requires fixed_target_idx to also be provided")
 
-        num_frames = images.shape[0]
-
-        if num_frames < num_input_views + 1:
-            raise ValueError(
-                f"Need at least {num_input_views + 1} frames, got {num_frames}"
-            )
+        if fixed_train_indices is not None:
+            train_indices = sorted(int(idx) for idx in fixed_train_indices)
+            if len(train_indices) != num_input_views:
+                raise ValueError(
+                    f"Expected {num_input_views} fixed_train_indices, got {len(train_indices)}"
+                )
+            if len(set(train_indices)) != len(train_indices):
+                raise ValueError("fixed_train_indices must be unique")
+            if fixed_target_idx in train_indices:
+                raise ValueError("fixed_target_idx must not appear in fixed_train_indices")
+            if min(train_indices) < 0 or max(train_indices) >= num_frames:
+                raise ValueError(
+                    f"fixed_train_indices must be in [0, {num_frames - 1}]"
+                )
+            if fixed_target_idx < 0 or fixed_target_idx >= num_frames:
+                raise ValueError(f"fixed_target_idx must be in [0, {num_frames - 1}]")
+            return int(fixed_target_idx), train_indices
 
         before_quota = num_input_views // 2
         after_quota = num_input_views // 2
@@ -149,7 +173,15 @@ class RealEstate10KDataset(Dataset):
                 f"for num_input_views={num_input_views} and num_frames={num_frames}"
             )
 
-        target_idx = random.choice(valid_target_indices)
+        if fixed_target_idx is not None:
+            target_idx = int(fixed_target_idx)
+            if target_idx not in valid_target_indices:
+                raise ValueError(
+                    f"fixed_target_idx={target_idx} is not valid for num_input_views={num_input_views} "
+                    f"and num_frames={num_frames}"
+                )
+        else:
+            target_idx = random.choice(valid_target_indices)
 
         before_candidates = list(range(0, target_idx))
         after_candidates = list(range(target_idx + 1, num_frames))
@@ -157,6 +189,57 @@ class RealEstate10KDataset(Dataset):
         selected_before = sorted(random.sample(before_candidates, before_quota))
         selected_after = sorted(random.sample(after_candidates, after_quota))
         train_indices = selected_before + selected_after
+        return int(target_idx), train_indices
+
+    def build_training_data(self, scene, num_input_views):
+        """
+        Split a loaded scene into:
+          - one randomly selected target frame
+          - num_input_views randomly sampled training frames from both
+            before and after the target so the target stays temporally
+            in the middle of the selected context
+        """
+        images = scene["images"]
+        intrinsics = scene["intrinsics"]
+        poses = scene["poses"]
+        timestamps = scene["timestamps"]
+
+        num_frames = images.shape[0]
+
+        if num_frames < num_input_views + 1:
+            raise ValueError(
+                f"Need at least {num_input_views + 1} frames, got {num_frames}"
+            )
+
+        selection_mode = "random"
+        scene_key = str(scene["scene"])
+        cached_case = self._cached_training_cases.get(scene_key)
+
+        if self.freeze_view_sampling and cached_case is not None:
+            target_idx = cached_case["target_idx"]
+            train_indices = list(cached_case["train_indices"])
+            selection_mode = "cached"
+        else:
+            target_idx, train_indices = self._sample_training_indices(
+                num_frames=num_frames,
+                num_input_views=num_input_views,
+                fixed_target_idx=self.fixed_target_idx,
+                fixed_train_indices=self.fixed_train_indices,
+            )
+            if self.fixed_target_idx is not None or self.fixed_train_indices is not None:
+                selection_mode = "fixed_args"
+            if self.freeze_view_sampling:
+                self._cached_training_cases[scene_key] = {
+                    "target_idx": target_idx,
+                    "train_indices": list(train_indices),
+                }
+                if selection_mode == "random":
+                    selection_mode = "cached_seed"
+
+        selected_before = [idx for idx in train_indices if idx < target_idx]
+        selected_after = [idx for idx in train_indices if idx > target_idx]
+        before_quota = len(selected_before)
+        after_quota = len(selected_after)
 
         training_data = {
             "scene": scene["scene"],
@@ -183,6 +266,7 @@ class RealEstate10KDataset(Dataset):
             num_frames=num_frames,
             target_idx=target_idx,
             train_indices=train_indices,
+            selection_mode=selection_mode,
             num_input_views=num_input_views,
             num_before_target=before_quota,
             num_after_target=after_quota,

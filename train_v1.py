@@ -261,6 +261,10 @@ def main():
     parser.add_argument('--save_dir_name', type=str, default=None, help='Override the last folder name of config.training.save_dir')
     parser.add_argument('--enable_scene_scan', type=int, choices=[0, 1], default=1, help='Enable or disable dataset scene scanning with 0/1')
     parser.add_argument('--max_valid_scenes', type=int, default=None, help='Optionally limit how many loaded scenes are used after filtering')
+    parser.add_argument('--overfit_scene_index', type=int, default=None, help='After filtering/limiting, keep only the scene at this index for a true overfit debug run')
+    parser.add_argument('--freeze_view_sampling', type=int, choices=[0, 1], default=0, help='Reuse the same target/input frame selection instead of resampling every epoch')
+    parser.add_argument('--fixed_target_idx', type=int, default=None, help='Use a fixed target frame index for build_training_data')
+    parser.add_argument('--fixed_train_indices', type=str, default=None, help='Comma-separated fixed input frame indices, e.g. 0,4,11,16,23,55,63,117')
     
     args = parser.parse_args()
 
@@ -283,7 +287,23 @@ def main():
             config.training.save_dir = args.save_dir_name
         else:
             config.training.save_dir = os.path.join(base_save_parent, args.save_dir_name)
+    if args.overfit_scene_index is not None:
+        config.data.shuffle = False
+    if args.freeze_view_sampling:
+        config.data.shuffle = False
     device = resolve_device(config.training.device)
+
+    fixed_train_indices = None
+    if args.fixed_train_indices is not None:
+        fixed_train_indices = [
+            int(part.strip())
+            for part in args.fixed_train_indices.split(",")
+            if part.strip() != ""
+        ]
+        if len(fixed_train_indices) == 0:
+            raise ValueError("--fixed_train_indices was provided but no indices were parsed")
+    if fixed_train_indices is not None and args.fixed_target_idx is None:
+        raise ValueError("--fixed_train_indices requires --fixed_target_idx")
 
     
     run_model_name = args.model_name or "gs_default_model_name"
@@ -304,6 +324,10 @@ def main():
     print(f"Using pin_memory: {config.data.pin_memory}")
     print(f"Scene scan enabled: {bool(args.enable_scene_scan)}")
     print(f"Max valid scenes: {args.max_valid_scenes}")
+    print(f"Overfit scene index: {args.overfit_scene_index}")
+    print(f"Freeze view sampling: {bool(args.freeze_view_sampling)}")
+    print(f"Fixed target idx: {args.fixed_target_idx}")
+    print(f"Fixed train indices: {fixed_train_indices}")
     print(f"Saving epoch checkpoints every {config.training.save_every_n_epochs} epochs")
     print(f"Using save_dir: {config.training.save_dir}")
     print(f"Debug CSV log: {debug_log_path}")
@@ -363,12 +387,31 @@ def main():
     if args.max_valid_scenes is not None:
         dataset_manager.scenes = dataset_manager.scenes[:args.max_valid_scenes]
         print(f"Using {len(dataset_manager.scenes)} scenes after limiting.")
+    if args.overfit_scene_index is not None:
+        if args.overfit_scene_index < 0 or args.overfit_scene_index >= len(dataset_manager.scenes):
+            raise ValueError(
+                f"--overfit_scene_index={args.overfit_scene_index} is out of range for "
+                f"{len(dataset_manager.scenes)} available scenes"
+            )
+        chosen_scene = dataset_manager.scenes[args.overfit_scene_index]
+        dataset_manager.scenes = [chosen_scene]
+        print(f"Overfit mode using single scene: {chosen_scene.name}")
+    dataset_manager.configure_training_case(
+        freeze_view_sampling=bool(args.freeze_view_sampling or args.overfit_scene_index is not None),
+        fixed_target_idx=args.fixed_target_idx,
+        fixed_train_indices=fixed_train_indices,
+    )
     DEBUG.log_debuge_csv(
         "dataset_ready",
         data_root=config.data.data_root,
         scene_scan_enabled=bool(args.enable_scene_scan),
         num_scenes=len(dataset_manager.scenes),
         max_valid_scenes=args.max_valid_scenes,
+        overfit_scene_index=args.overfit_scene_index,
+        freeze_view_sampling=bool(args.freeze_view_sampling or args.overfit_scene_index is not None),
+        fixed_target_idx=args.fixed_target_idx,
+        fixed_train_indices=fixed_train_indices,
+        selected_scenes=[scene.name for scene in dataset_manager.scenes[:10]],
     )
     dataset = dataset_manager
     loader = DataLoader(
