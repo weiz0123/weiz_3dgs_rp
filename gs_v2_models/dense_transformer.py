@@ -195,20 +195,35 @@ class DenseFusionTransformer(nn.Module):
         ])
 
     def forward(self, vggt_tokens, dino_tokens):
-        # Reshape: VGGT and DINO often come in as [B, V, N, C]
-        # We need to flatten the View dimension into the Batch dimension 
-        # or sequence dimension for the transformer.
-        
+        if vggt_tokens.ndim != 4:
+            raise ValueError(
+                f"Expected vggt_tokens [B, V, N, C], got {tuple(vggt_tokens.shape)}"
+            )
+        if dino_tokens.ndim != 4:
+            raise ValueError(
+                f"Expected dino_tokens [B, V, N, C], got {tuple(dino_tokens.shape)}"
+            )
+        if vggt_tokens.shape[:3] != dino_tokens.shape[:3]:
+            raise ValueError(
+                "VGGT and DINO tokens must agree on [B, V, N], got "
+                f"{tuple(vggt_tokens.shape)} and {tuple(dino_tokens.shape)}"
+            )
+
         b, v, n, c_v = vggt_tokens.shape
         _, _, _, c_d = dino_tokens.shape
-        
-        # Flatten B and V to process all views in parallel
-        vggt_flat = vggt_tokens.view(b * v, n, c_v)
-        dino_flat = dino_tokens.view(b * v, n, c_d)
-        
+
+        # Treat the view axis as the token sequence for each spatial location.
+        # This gives us efficient multi-view fusion without the quadratic cost
+        # of attending across every view/spatial token at once.
+        vggt_flat = (
+            vggt_tokens.permute(0, 2, 1, 3).contiguous().view(b * n, v, c_v)
+        )
+        dino_flat = (
+            dino_tokens.permute(0, 2, 1, 3).contiguous().view(b * n, v, c_d)
+        )
+
         x = vggt_flat
         for layer in self.layers:
             x = layer(x, dino_flat)
-            
-        # Reshape back to [B, V, N, C]
-        return x.view(b, v, n, c_v)
+
+        return x.view(b, n, v, c_v).permute(0, 2, 1, 3).contiguous()

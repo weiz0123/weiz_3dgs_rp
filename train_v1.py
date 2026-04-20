@@ -130,7 +130,7 @@ def visualize_epoch_outputs(stats, save_dir, epoch):
     axes[3].set_title("vggt depth", fontsize=10, loc="left")
     axes[3].axis("off")
 
-    axes[4].imshow(_to_dino_pca_numpy(stats["fused_map"][0]))
+    axes[4].imshow(_to_dino_pca_numpy(stats["fused_map"][0, 0]))
     axes[4].set_title("fused map", fontsize=10, loc="left")
     axes[4].axis("off")
 

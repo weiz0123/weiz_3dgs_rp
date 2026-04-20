@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
+ xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+ xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"
+ xmlns:v="urn:schemas-microsoft-com:vml"
+ xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing"
+ xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+ xmlns:w10="urn:schemas-microsoft-com:office:word"
+ xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+ xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"
+ xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"
+ xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk"
+ xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml"
+ xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+ mc:Ignorable="w14 wp14">
+  <w:body>
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>2026-04-19 11:16:35 PM UTC-06:00</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">Gaussian head: The first major issue was overproduction of weakly differentiated Gaussians, which made the renderer collapse into dense fog. The second major issue was the opposite failure mode: after stronger gating was added, opacity was driven to zero everywhere, so the scene rendered completely black even when means, scales, and SH coefficients were still nonzero.</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">Gaussian head details: Confidence handling was ineffective in the early path because conf_low behaved like all ones, so unsafe geometry was not being suppressed. Opacity became the main failure switch: too permissive caused beige fog, too aggressive caused fully transparent splats. The head also relied too hard on raw depth validity, so when depth weakened, opacity collapsed instead of degrading gracefully.</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">VGGT: VGGT does produce both depth and a depth confidence signal, and those are wired through the local model path. The important issue was not that VGGT lacked confidence, but that the depth prior was allowed to participate in the render-loss path. That made it possible for training to corrupt the depth field, which then destabilized the Gaussian head.</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">Current debug evidence: In the recent black-render logs, means3D remained valid, scales remained nonzero, SH coefficients remained nonzero, and radii were sometimes nonzero, but opacity was exactly zero everywhere. That shows the immediate render failure is an opacity collapse rather than a pure camera or rasterizer failure.</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">Fixes applied so far: Real VGGT depth and depth confidence are passed into the Gaussian head. In-place autograd operations were removed. The Gaussian head was simplified to operate on the low-resolution feature grid. Depth and depth confidence fed into the head are now detached in v1_gs so render loss cannot keep damaging the VGGT depth prior. The head now uses softer depth-positive gating and clamped depth-for-points instead of hard-killing opacity whenever depth becomes tiny.</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">Practical takeaway: The original fog problem was mostly a Gaussian-head design problem with too many unsafe splats. The current all-black problem is a depth-to-opacity collapse problem, where the head has been zeroing every Gaussian's opacity after unstable depth behavior. The next good checkpoint to trust is one where opacity is no longer all zeros and non_black_fraction rises above zero without the scene returning to full-frame fog.</w:t></w:r></w:p>
+    <w:sectPr>
+      <w:pgSz w:w="12240" w:h="15840"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>
+    </w:sectPr>
+  </w:body>
+</w:document>

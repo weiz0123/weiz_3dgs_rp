@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 from debug_util import DEBUG
-from .dense_transformer import CrossAttention, DenseFusionTransformer, SelfAttention
+from .dense_transformer import DenseFusionTransformer
 from .v1_dino_encoder import DinoV3DenseEncoder
 from .v1_vggt_encoder import V1VGGTEncoder
 from .v1_gaussian_head import DepthAnchoredGaussianHead
@@ -28,6 +28,49 @@ def _infer_token_grid(num_tokens, aspect_ratio):
             best_err = err
 
     return best_h, best_w
+
+
+def _compute_padded_hw(height, width, patch_h, patch_w):
+    pad_h = (patch_h - (height % patch_h)) % patch_h
+    pad_w = (patch_w - (width % patch_w)) % patch_w
+    return height + pad_h, width + pad_w
+
+
+def _extract_vggt_spatial_map(tokens, padded_hw, patch_h, patch_w):
+    token_tensor = tokens[-1] if isinstance(tokens, (list, tuple)) else tokens
+    if token_tensor.ndim != 4:
+        raise ValueError(
+            f"Expected VGGT tokens with shape [B, V, N, C], got {tuple(token_tensor.shape)}"
+        )
+
+    padded_h, padded_w = padded_hw
+    grid_h = padded_h // patch_h
+    grid_w = padded_w // patch_w
+    spatial_token_count = grid_h * grid_w
+    total_tokens = token_tensor.shape[2]
+    prefix_tokens = total_tokens - spatial_token_count
+
+    if prefix_tokens < 0:
+        raise ValueError(
+            f"VGGT token count {total_tokens} is smaller than inferred spatial grid "
+            f"{grid_h}x{grid_w} ({spatial_token_count})"
+        )
+
+    spatial_tokens = token_tensor[:, :, prefix_tokens:, :]
+    if spatial_tokens.shape[2] != spatial_token_count:
+        raise ValueError(
+            f"Expected {spatial_token_count} spatial tokens, got {spatial_tokens.shape[2]}"
+        )
+
+    spatial_map = spatial_tokens.reshape(
+        token_tensor.shape[0],
+        token_tensor.shape[1],
+        grid_h,
+        grid_w,
+        token_tensor.shape[-1],
+    ).permute(0, 1, 4, 2, 3).contiguous()
+
+    return token_tensor, spatial_map, prefix_tokens
 
 
 
@@ -59,6 +102,10 @@ class V1GSModel(nn.Module):
             dino_dim=4096,  
             depth=2, 
             num_heads=8
+        )
+        self.vggt_to_dino = nn.Sequential(
+            nn.LayerNorm(2048),
+            nn.Linear(2048, 4096),
         )
 
         self.gaussian_head = DepthAnchoredGaussianHead(
@@ -103,14 +150,53 @@ class V1GSModel(nn.Module):
         # DINO features
         dino_features, _ = self.dino(inputs)
         feat_h, feat_w = dino_features.shape[-2:]
-        flat_features = dino_features.reshape(batch_size * num_view, dino_features.shape[2], feat_h, feat_w)
+        dino_token_grid = dino_features.permute(0, 1, 3, 4, 2).reshape(
+            batch_size,
+            num_view,
+            feat_h * feat_w,
+            dino_features.shape[2],
+        )
 
         # VGGT outputs
         vggt_outputs = self.vggt(inputs)
+        vggt_tokens_all = vggt_outputs["tokens"]
         depth_all = vggt_outputs["depth"]
         depth_conf_all = vggt_outputs["depth_conf"]
         extrinsic_all = vggt_outputs["estimated_extrinsics"] # not used currently
         intrinsic_all = vggt_outputs["estimated_intrinsics"] # not used currently
+
+        padded_hw = _compute_padded_hw(height, width, self.patch_h, self.patch_w)
+        vggt_token_tensor, vggt_spatial_map, vggt_prefix_tokens = _extract_vggt_spatial_map(
+            vggt_tokens_all,
+            padded_hw=padded_hw,
+            patch_h=self.patch_h,
+            patch_w=self.patch_w,
+        )
+        vggt_spatial_low = F.interpolate(
+            vggt_spatial_map.reshape(batch_size * num_view, vggt_spatial_map.shape[2], vggt_spatial_map.shape[3], vggt_spatial_map.shape[4]),
+            size=(feat_h, feat_w),
+            mode="bilinear",
+            align_corners=False,
+        ).reshape(batch_size, num_view, vggt_spatial_map.shape[2], feat_h, feat_w)
+        vggt_token_grid = vggt_spatial_low.permute(0, 1, 3, 4, 2).reshape(
+            batch_size,
+            num_view,
+            feat_h * feat_w,
+            vggt_spatial_low.shape[2],
+        )
+        fused_vggt_tokens = self.fusion_transformer(
+            vggt_tokens=vggt_token_grid,
+            dino_tokens=dino_token_grid,
+        )
+        fused_features = dino_token_grid + self.vggt_to_dino(fused_vggt_tokens)
+        fused_map = fused_features.reshape(
+            batch_size,
+            num_view,
+            feat_h,
+            feat_w,
+            dino_features.shape[2],
+        ).permute(0, 1, 4, 2, 3).contiguous()
+        flat_features = fused_map.reshape(batch_size * num_view, fused_map.shape[2], feat_h, feat_w)
 
         flat_depth = depth_all.reshape(batch_size * num_view, 1, height, width).detach()
         flat_depth_conf = depth_conf_all.reshape(batch_size * num_view, 1, height, width).detach()
@@ -156,7 +242,14 @@ class V1GSModel(nn.Module):
                 "v1_gs_forward",
                 inputs=inputs,
                 dino_features=dino_features,
+                dino_token_grid=dino_token_grid,
+                vggt_token_tensor=vggt_token_tensor,
+                vggt_prefix_tokens=vggt_prefix_tokens,
+                vggt_spatial_map=vggt_spatial_map,
+                vggt_spatial_low=vggt_spatial_low,
+                fused_vggt_tokens=fused_vggt_tokens,
                 flat_features=flat_features,
+                fused_map=fused_map,
                 depth_all=depth_all,
                 flat_depth=flat_depth,
                 depth_conf_all=depth_conf_all,
@@ -174,7 +267,7 @@ class V1GSModel(nn.Module):
         return {
             "guaussian_outputs": outputs,
             "features": dino_features,
-            "fused_map": flat_features,
+            "fused_map": fused_map,
             "depth": depth_all,
             "depth_low": depth_low,
             "conf_low": conf_low,
