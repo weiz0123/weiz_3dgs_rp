@@ -85,6 +85,10 @@ class V1GSModel(nn.Module):
         self.feature_dim = 2048  # 
         self.patch_h = 14
         self.patch_w = 14
+        self.emission_grid_upsample = max(
+            1,
+            int(getattr(self.config.model, "emission_grid_upsample", 1)),
+        )
         self._printed_intrinsics_debug = False
 
 
@@ -196,7 +200,23 @@ class V1GSModel(nn.Module):
             feat_w,
             dino_features.shape[2],
         ).permute(0, 1, 4, 2, 3).contiguous()
-        flat_features = fused_map.reshape(batch_size * num_view, fused_map.shape[2], feat_h, feat_w)
+        emit_h = feat_h * self.emission_grid_upsample
+        emit_w = feat_w * self.emission_grid_upsample
+        if self.emission_grid_upsample > 1:
+            head_feature_map = F.interpolate(
+                fused_map.reshape(batch_size * num_view, fused_map.shape[2], feat_h, feat_w),
+                size=(emit_h, emit_w),
+                mode="bilinear",
+                align_corners=False,
+            ).reshape(batch_size, num_view, fused_map.shape[2], emit_h, emit_w)
+        else:
+            head_feature_map = fused_map
+        flat_features = head_feature_map.reshape(
+            batch_size * num_view,
+            head_feature_map.shape[2],
+            emit_h,
+            emit_w,
+        )
 
         flat_depth = depth_all.reshape(batch_size * num_view, 1, height, width).detach()
         flat_depth_conf = depth_conf_all.reshape(batch_size * num_view, 1, height, width).detach()
@@ -218,13 +238,13 @@ class V1GSModel(nn.Module):
 
         depth_low = F.interpolate(
             flat_depth,
-            size=(feat_h, feat_w),
+            size=(emit_h, emit_w),
             mode="bilinear",
             align_corners=False,
         )
         conf_low = F.interpolate(
             flat_depth_conf,
-            size=(feat_h, feat_w),
+            size=(emit_h, emit_w),
             mode="bilinear",
             align_corners=False,
         )
@@ -248,6 +268,9 @@ class V1GSModel(nn.Module):
                 vggt_spatial_map=vggt_spatial_map,
                 vggt_spatial_low=vggt_spatial_low,
                 fused_vggt_tokens=fused_vggt_tokens,
+                emission_grid_upsample=self.emission_grid_upsample,
+                emission_hw=[emit_h, emit_w],
+                head_feature_map=head_feature_map,
                 flat_features=flat_features,
                 fused_map=fused_map,
                 depth_all=depth_all,
