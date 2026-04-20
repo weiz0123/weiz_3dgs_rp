@@ -322,7 +322,7 @@ def main():
         model = V1GSModel(
             num_view=config.data.n_input_views,
             sh_degree=2,
-            gaussian_per_pixel=1,
+            gaussian_per_pixel=config.model.gaussian_per_cell,
             config=config
         ).to(device)
     else:

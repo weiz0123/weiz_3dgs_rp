@@ -197,6 +197,7 @@ class DataConfig:
 class ModelConfig:
     model_version: str = "v(-1)_gs"
     dino_name: str = "facebook/dinov3-vit7b16-pretrain-lvd1689m"
+    gaussian_per_cell: int = 4
     freeze_dino: bool = True
     freeze_vggt: bool = True
     vggt_unfreeze_heads: bool = True
@@ -226,8 +227,8 @@ class TrainingConfig:
     lambda_gradient: float = 0.1
     lambda_scale_reg: float = 1e-4
     lambda_opacity_reg: float = 5e-5
-    render_opacity_threshold: float = 0.01
-    render_topk_gaussians: int | None = 4096
+    render_opacity_threshold: float = 0.005
+    render_topk_gaussians: int | None = 16384
     save_every_n_epochs: int = 10
     emit_stride: int = 1
     max_scenes_per_epoch: int | None = 200

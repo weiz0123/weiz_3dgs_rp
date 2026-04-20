@@ -146,6 +146,20 @@ def _gaussian_regularizers(outputs):
     return scale_reg, opacity_reg
 
 
+def _camera_space_point_stats(points_world, target_extrinsic):
+    target_w2c = _to_homogeneous_4x4(target_extrinsic)
+    rotation = target_w2c[:3, :3]
+    translation = target_w2c[:3, 3]
+    points_cam = points_world @ rotation.transpose(0, 1) + translation
+    depth = points_cam[:, 2]
+    in_front = depth > 1e-4
+    return {
+        "camera_depth": depth,
+        "in_front_fraction": in_front.float().mean(),
+        "camera_depth_positive": depth[in_front],
+    }
+
+
 def render_scene(
     outputs,
     depth_all,
@@ -225,12 +239,16 @@ def render_scene(
         topk_gaussians = getattr(config.training, "render_topk_gaussians", None)
 
     keep_mask = torch.ones(num_gaussians_total, dtype=torch.bool, device=device)
+    kept_after_threshold = num_gaussians_total
     if opacity_threshold > 0.0:
         keep_mask = opacity.squeeze(-1) > opacity_threshold
+        kept_after_threshold = int(keep_mask.sum().item())
 
     if keep_mask.sum().item() == 0:
         keep_mask = torch.ones_like(keep_mask)
+        kept_after_threshold = num_gaussians_total
 
+    kept_after_topk = kept_after_threshold
     if topk_gaussians is not None and keep_mask.sum().item() > int(topk_gaussians):
         keep_indices = keep_mask.nonzero(as_tuple=False).squeeze(-1)
         keep_opacity = opacity.squeeze(-1)[keep_indices]
@@ -244,6 +262,7 @@ def render_scene(
         top_mask = torch.zeros_like(keep_mask)
         top_mask[top_indices] = True
         keep_mask = top_mask
+        kept_after_topk = int(keep_mask.sum().item())
 
     means3D = means3D[keep_mask]
     opacity = opacity[keep_mask]
@@ -251,6 +270,11 @@ def render_scene(
     rotations = rotations[keep_mask]
     shs = shs[keep_mask]
     num_gaussians_kept = int(means3D.shape[0])
+    camera_stats = _camera_space_point_stats(means3D, target_extrinsic[0])
+    depth_positive = camera_stats["camera_depth_positive"]
+    positive_depth_min = float(depth_positive.min().item()) if depth_positive.numel() > 0 else None
+    positive_depth_max = float(depth_positive.max().item()) if depth_positive.numel() > 0 else None
+    positive_depth_mean = float(depth_positive.mean().item()) if depth_positive.numel() > 0 else None
 
     if DEBUG.is_first_batch():
         DEBUG.log_debuge_csv(
@@ -261,7 +285,14 @@ def render_scene(
             rotations=rotations,
             shs=shs,
             num_gaussians_total=num_gaussians_total,
+            kept_after_threshold=kept_after_threshold,
+            kept_after_topk=kept_after_topk,
             num_gaussians_kept=num_gaussians_kept,
+            in_front_fraction=camera_stats["in_front_fraction"],
+            camera_depth=camera_stats["camera_depth"],
+            positive_depth_min=positive_depth_min,
+            positive_depth_max=positive_depth_max,
+            positive_depth_mean=positive_depth_mean,
             target_intrinsic=target_intrinsic,
             target_extrinsic=target_extrinsic,
         )
@@ -321,6 +352,7 @@ def render_scene(
     )
 
     non_black_fraction = _non_black_fraction(rendered_image)
+    positive_radii_fraction = (radii > 0).float().mean().item()
 
     if DEBUG.is_first_batch() or non_black_fraction == 0.0:
         DEBUG.log_debuge_csv(
@@ -328,7 +360,10 @@ def render_scene(
             rendered_image=rendered_image,
             radii=radii,
             num_gaussians_total=num_gaussians_total,
+            kept_after_threshold=kept_after_threshold,
+            kept_after_topk=kept_after_topk,
             num_gaussians_kept=num_gaussians_kept,
+            positive_radii_fraction=positive_radii_fraction,
             non_black_fraction=non_black_fraction,
         )
 
@@ -341,7 +376,14 @@ def render_scene(
             rotations=rotations,
             shs=shs,
             num_gaussians_total=num_gaussians_total,
+            kept_after_threshold=kept_after_threshold,
+            kept_after_topk=kept_after_topk,
             num_gaussians_kept=num_gaussians_kept,
+            in_front_fraction=camera_stats["in_front_fraction"],
+            camera_depth=camera_stats["camera_depth"],
+            positive_depth_min=positive_depth_min,
+            positive_depth_max=positive_depth_max,
+            positive_depth_mean=positive_depth_mean,
             target_intrinsic=target_intrinsic,
             target_extrinsic=target_extrinsic,
         )
