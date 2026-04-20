@@ -141,12 +141,10 @@ class DepthAnchoredGaussianHead(nn.Module):
         with torch.no_grad():
             for surface_idx in range(self.num_surfaces):
                 base = surface_idx * self.per_surface_dim
-                scale_base = base + 3
-                self.out.bias[scale_base:scale_base + 3] = -1.0
                 quat_base = base + 6
                 self.out.bias[quat_base] = 1.0
                 opacity_base = base + 10
-                self.out.bias[opacity_base] = -2.5
+                self.out.bias[opacity_base] = -2.0
                 sh_base = base + 11  # 3 dxyz + 3 scale + 4 quat + 1 opacity
                 for color_idx in range(3):
                     dc_index = sh_base + color_idx * self.sh_coeff_dim
@@ -173,21 +171,26 @@ class DepthAnchoredGaussianHead(nn.Module):
         valid_depth = ((depth > 1e-6) & torch.isfinite(depth)).to(raw.dtype)
         depth = torch.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
         depth_edge = _relative_depth_gradient(depth)
-        edge_gate = torch.exp(-4.0 * depth_edge).clamp(0.05, 1.0)
+        edge_gate = (0.5 + 0.5 * torch.exp(-2.0 * depth_edge)).clamp(0.5, 1.0)
 
         if conf is not None:
             conf = _normalize_confidence(conf.to(raw.dtype))
         else:
             conf = torch.ones_like(depth, dtype=raw.dtype)
 
-        support_gate = valid_depth * edge_gate * (0.15 + 0.85 * conf)
-        support_expanded = support_gate.unsqueeze(1)
+        valid_expanded = valid_depth.unsqueeze(1)
+        conf_gate = (0.35 + 0.65 * conf).unsqueeze(1)
+        edge_expanded = edge_gate.unsqueeze(1)
 
-        d_xyz = 0.001 * torch.tanh(dxyz_raw) * support_expanded
+        offset_gate = valid_expanded * conf_gate * edge_expanded
+        opacity_gate = valid_expanded * conf_gate
+        scale_gate = 0.75 + 0.25 * conf_gate
+
+        d_xyz = 0.001 * torch.tanh(dxyz_raw) * offset_gate
         base_scales = torch.exp(s_raw - 6.0).clamp(min=self.min_scale, max=self.max_scale)
         quat = F.normalize(q_raw, dim=2, eps=1e-6)
-        opacity = torch.sigmoid(a_raw) * support_expanded
-        scales = base_scales * (0.25 + 0.75 * support_expanded)
+        opacity = torch.sigmoid(a_raw) * opacity_gate
+        scales = (base_scales * scale_gate).clamp(min=self.min_scale, max=self.max_scale)
 
         sh_coeffs = sh_raw.view(
             batch_size,
@@ -212,7 +215,10 @@ class DepthAnchoredGaussianHead(nn.Module):
                 valid_depth=valid_depth,
                 depth_edge=depth_edge,
                 edge_gate=edge_gate,
-                support_gate=support_gate,
+                conf_gate=conf_gate,
+                offset_gate=offset_gate,
+                opacity_gate=opacity_gate,
+                scale_gate=scale_gate,
                 base_means=base_means,
                 d_xyz=d_xyz,
                 scales=scales,

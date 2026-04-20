@@ -233,12 +233,26 @@ def render_scene(outputs, depth_all, source_extrinsics, source_intrinsics, targe
         cov3D_precomp = None
     )
 
-    if DEBUG.is_first_batch():
+    non_black_fraction = _non_black_fraction(rendered_image)
+
+    if DEBUG.is_first_batch() or non_black_fraction == 0.0:
         DEBUG.log_debuge_csv(
             "render_scene_outputs",
             rendered_image=rendered_image,
             radii=radii,
-            non_black_fraction=_non_black_fraction(rendered_image),
+            non_black_fraction=non_black_fraction,
+        )
+
+    if non_black_fraction == 0.0:
+        DEBUG.log_debuge_csv(
+            "render_scene_black_debug",
+            means3D=means3D,
+            opacity=opacity,
+            scales=scales,
+            rotations=rotations,
+            shs=shs,
+            target_intrinsic=target_intrinsic,
+            target_extrinsic=target_extrinsic,
         )
     
     return rendered_image
