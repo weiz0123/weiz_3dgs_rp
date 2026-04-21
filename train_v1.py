@@ -265,6 +265,10 @@ def main():
     parser.add_argument('--freeze_view_sampling', type=int, choices=[0, 1], default=0, help='Reuse the same target/input frame selection instead of resampling every epoch')
     parser.add_argument('--fixed_target_idx', type=int, default=None, help='Use a fixed target frame index for build_training_data')
     parser.add_argument('--fixed_train_indices', type=str, default=None, help='Comma-separated fixed input frame indices, e.g. 0,4,11,16,23,55,63,117')
+    parser.add_argument('--gaussian_per_cell', type=int, default=None, help='Override how many Gaussians are emitted per cell/pixel')
+    parser.add_argument('--render_topk_gaussians', type=int, default=None, help='Override the render-time top-k Gaussian budget')
+    parser.add_argument('--emission_mode', type=str, choices=['upsampled_grid', 'pixel_aligned'], default=None, help='Choose coarse-grid or pixel-aligned Gaussian emission')
+    parser.add_argument('--pixel_aligned_stride', type=int, default=None, help='Emit on every Nth image pixel when using pixel-aligned emission')
     
     args = parser.parse_args()
 
@@ -287,6 +291,14 @@ def main():
             config.training.save_dir = args.save_dir_name
         else:
             config.training.save_dir = os.path.join(base_save_parent, args.save_dir_name)
+    if args.gaussian_per_cell is not None:
+        config.model.gaussian_per_cell = args.gaussian_per_cell
+    if args.render_topk_gaussians is not None:
+        config.training.render_topk_gaussians = args.render_topk_gaussians
+    if args.emission_mode is not None:
+        config.model.emission_mode = args.emission_mode
+    if args.pixel_aligned_stride is not None:
+        config.model.pixel_aligned_stride = args.pixel_aligned_stride
     if args.overfit_scene_index is not None:
         config.data.shuffle = False
     if args.freeze_view_sampling:
@@ -322,6 +334,10 @@ def main():
     print(f"Using num_view: {config.data.n_input_views}")
     print(f"Using num_workers: {config.data.num_workers}")
     print(f"Using pin_memory: {config.data.pin_memory}")
+    print(f"Emission mode: {config.model.emission_mode}")
+    print(f"Pixel aligned stride: {config.model.pixel_aligned_stride}")
+    print(f"Gaussian per cell: {config.model.gaussian_per_cell}")
+    print(f"Render top-k Gaussians: {config.training.render_topk_gaussians}")
     print(f"Scene scan enabled: {bool(args.enable_scene_scan)}")
     print(f"Max valid scenes: {args.max_valid_scenes}")
     print(f"Overfit scene index: {args.overfit_scene_index}")
