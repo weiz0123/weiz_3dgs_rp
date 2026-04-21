@@ -197,7 +197,7 @@ class DataConfig:
 class ModelConfig:
     model_version: str = "v(-1)_gs"
     dino_name: str = "facebook/dinov3-vit7b16-pretrain-lvd1689m"
-    color_mode: str = "sh"
+    color_mode: str = "rgb"
     sh_degree: int = 2
     gaussian_per_cell: int = 1
     emission_mode: str = "pixel_aligned"

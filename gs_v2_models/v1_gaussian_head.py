@@ -4,6 +4,8 @@ import torch.nn.functional as F
 
 from debug_util import DEBUG
 
+_SH_C0 = 0.28209479177387814
+
 class ConvBlock(nn.Module):
     def __init__(self, cin, cout, k=3, s=1, p=1, d=1):
         super().__init__()
@@ -241,6 +243,12 @@ class DepthAnchoredGaussianHead(nn.Module):
                 height,
                 width,
             )
+            if rgb is not None:
+                rgb = rgb.to(raw.dtype).unsqueeze(1)
+                sh_residual = 0.1 * sh_coeffs
+                sh_residual[:, :, :, 0] = 0.1 * (sh_coeffs[:, :, :, 0] - self.init_dc_bias)
+                sh_coeffs = sh_residual
+                sh_coeffs[:, :, :, 0] = rgb / _SH_C0 + sh_residual[:, :, :, 0]
 
         base_means = _depth_to_world_points(depth_for_points, intrinsic, extrinsic)
         means3D = base_means.unsqueeze(1) + d_xyz
@@ -267,6 +275,7 @@ class DepthAnchoredGaussianHead(nn.Module):
                 scale_gate=scale_gate,
                 rgb=rgb,
                 color_mode="rgb" if self.use_direct_rgb else "sh",
+                sh_rgb_anchor=(rgb / _SH_C0) if (rgb is not None and not self.use_direct_rgb) else None,
                 pixel_footprint_scales=pixel_footprint_scales,
                 learned_scale_factor=learned_scale_factor,
                 base_means=base_means,

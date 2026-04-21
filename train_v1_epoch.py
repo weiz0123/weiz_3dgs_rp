@@ -323,8 +323,23 @@ def render_scene(
         topk_gaussians = getattr(config.training, "render_topk_gaussians", None)
 
     keep_mask = torch.ones(num_gaussians_total, dtype=torch.bool, device=device)
-    xy_scale = torch.sqrt((scales[:, 0] * scales[:, 1]).clamp_min(1e-12))
-    selection_score = opacity.squeeze(-1) * xy_scale
+    projection_stats_all = _project_points_to_image(
+        means3D,
+        target_extrinsic=target_extrinsic,
+        target_intrinsic=target_intrinsic,
+        H=H,
+        W=W,
+    )
+    depth_safe = projection_stats_all["depth"].clamp_min(1e-4)
+    K_selection = _to_pixel_intrinsics(target_intrinsic[0], H, W)
+    projected_radius_x_px = K_selection[0, 0].abs() * scales[:, 0] / depth_safe
+    projected_radius_y_px = K_selection[1, 1].abs() * scales[:, 1] / depth_safe
+    screen_support = torch.sqrt((projected_radius_x_px * projected_radius_y_px).clamp_min(1e-12)).clamp(max=64.0)
+    selection_score = (
+        opacity.squeeze(-1)
+        * screen_support
+        * projection_stats_all["inside_image"].to(opacity.dtype)
+    )
     kept_after_threshold = num_gaussians_total
     selection_strategy = "threshold_only"
     per_view_budget = None
@@ -383,7 +398,7 @@ def render_scene(
                     )
                     top_mask[remaining_indices[top_extra]] = True
 
-            selection_strategy = "per_view_opacity_scale"
+            selection_strategy = "per_view_projected_support"
         else:
             keep_indices = keep_mask.nonzero(as_tuple=False).squeeze(-1)
             keep_scores = selection_score[keep_indices]
@@ -395,7 +410,7 @@ def render_scene(
             )
             top_indices = keep_indices[top_local]
             top_mask[top_indices] = True
-            selection_strategy = "global_opacity_scale"
+            selection_strategy = "global_projected_support"
 
         keep_mask = top_mask
         kept_after_topk = int(keep_mask.sum().item())
@@ -428,6 +443,10 @@ def render_scene(
             shs=shs,
             colors_precomp=colors_precomp,
             selection_score=selection_score,
+            projected_radius_x_px=projected_radius_x_px,
+            projected_radius_y_px=projected_radius_y_px,
+            screen_support=screen_support,
+            preselection_inside_image_fraction=projection_stats_all["inside_image_fraction"],
             selection_strategy=selection_strategy,
             per_view_budget=per_view_budget,
             num_gaussians_total=num_gaussians_total,
