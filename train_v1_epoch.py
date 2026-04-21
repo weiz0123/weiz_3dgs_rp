@@ -323,7 +323,11 @@ def render_scene(
         topk_gaussians = getattr(config.training, "render_topk_gaussians", None)
 
     keep_mask = torch.ones(num_gaussians_total, dtype=torch.bool, device=device)
+    xy_scale = torch.sqrt((scales[:, 0] * scales[:, 1]).clamp_min(1e-12))
+    selection_score = opacity.squeeze(-1) * xy_scale
     kept_after_threshold = num_gaussians_total
+    selection_strategy = "threshold_only"
+    per_view_budget = None
     if opacity_threshold > 0.0:
         keep_mask = opacity.squeeze(-1) > opacity_threshold
         kept_after_threshold = int(keep_mask.sum().item())
@@ -334,17 +338,65 @@ def render_scene(
 
     kept_after_topk = kept_after_threshold
     if topk_gaussians is not None and keep_mask.sum().item() > int(topk_gaussians):
-        keep_indices = keep_mask.nonzero(as_tuple=False).squeeze(-1)
-        keep_opacity = opacity.squeeze(-1)[keep_indices]
-        _, top_local = torch.topk(
-            keep_opacity,
-            k=int(topk_gaussians),
-            largest=True,
-            sorted=False,
-        )
-        top_indices = keep_indices[top_local]
         top_mask = torch.zeros_like(keep_mask)
-        top_mask[top_indices] = True
+        topk_budget = int(topk_gaussians)
+
+        if num_views > 1 and num_gaussians_total % num_views == 0:
+            gaussians_per_view = num_gaussians_total // num_views
+            per_view_budget = topk_budget // num_views
+            remainder = topk_budget % num_views
+
+            for view_idx in range(num_views):
+                start = view_idx * gaussians_per_view
+                end = start + gaussians_per_view
+                local_keep = keep_mask[start:end]
+                if not local_keep.any():
+                    continue
+
+                local_indices = local_keep.nonzero(as_tuple=False).squeeze(-1)
+                local_scores = selection_score[start:end][local_indices]
+                local_budget = per_view_budget + (1 if view_idx < remainder else 0)
+                local_budget = min(local_budget, int(local_indices.numel()))
+                if local_budget <= 0:
+                    continue
+
+                _, top_local = torch.topk(
+                    local_scores,
+                    k=local_budget,
+                    largest=True,
+                    sorted=False,
+                )
+                top_mask[start:end][local_indices[top_local]] = True
+
+            current_kept = int(top_mask.sum().item())
+            if current_kept < topk_budget:
+                remaining_mask = keep_mask & ~top_mask
+                remaining_indices = remaining_mask.nonzero(as_tuple=False).squeeze(-1)
+                if remaining_indices.numel() > 0:
+                    remaining_scores = selection_score[remaining_indices]
+                    extra_budget = min(topk_budget - current_kept, int(remaining_indices.numel()))
+                    _, top_extra = torch.topk(
+                        remaining_scores,
+                        k=extra_budget,
+                        largest=True,
+                        sorted=False,
+                    )
+                    top_mask[remaining_indices[top_extra]] = True
+
+            selection_strategy = "per_view_opacity_scale"
+        else:
+            keep_indices = keep_mask.nonzero(as_tuple=False).squeeze(-1)
+            keep_scores = selection_score[keep_indices]
+            _, top_local = torch.topk(
+                keep_scores,
+                k=topk_budget,
+                largest=True,
+                sorted=False,
+            )
+            top_indices = keep_indices[top_local]
+            top_mask[top_indices] = True
+            selection_strategy = "global_opacity_scale"
+
         keep_mask = top_mask
         kept_after_topk = int(keep_mask.sum().item())
 
@@ -375,6 +427,9 @@ def render_scene(
             rotations=rotations,
             shs=shs,
             colors_precomp=colors_precomp,
+            selection_score=selection_score,
+            selection_strategy=selection_strategy,
+            per_view_budget=per_view_budget,
             num_gaussians_total=num_gaussians_total,
             kept_after_threshold=kept_after_threshold,
             kept_after_topk=kept_after_topk,
@@ -501,6 +556,8 @@ def render_scene(
             inside_image_fraction=debug_payload.get("inside_image_fraction"),
             support_actual_non_black_fraction=debug_payload.get("support_actual_non_black_fraction"),
             support_opacity_one_non_black_fraction=debug_payload.get("support_opacity_one_non_black_fraction"),
+            selection_strategy=selection_strategy,
+            per_view_budget=per_view_budget,
             num_gaussians_total=num_gaussians_total,
             kept_after_threshold=kept_after_threshold,
             kept_after_topk=kept_after_topk,

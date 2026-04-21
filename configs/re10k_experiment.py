@@ -235,7 +235,7 @@ class TrainingConfig:
     lambda_scale_reg: float = 1e-4
     lambda_opacity_reg: float = 5e-5
     render_opacity_threshold: float = 0.001
-    render_topk_gaussians: int | None = 262144
+    render_topk_gaussians: int | None = 524288
     save_every_n_epochs: int = 10
     emit_stride: int = 1
     max_scenes_per_epoch: int | None = 200
