@@ -380,6 +380,28 @@ def _center_heatmap(u, v, mask, H, W, bins_h=45, bins_w=80):
     return heatmap / heatmap.max().clamp_min(1.0)
 
 
+def _coverage_balancing_weight(u, v, mask, H, W, bins_h=45, bins_w=80):
+    weight = torch.zeros_like(u, dtype=torch.float32)
+    if mask.sum().item() == 0:
+        return weight
+
+    u_norm = (u[mask] / max(W - 1, 1)) * (bins_w - 1)
+    v_norm = (v[mask] / max(H - 1, 1)) * (bins_h - 1)
+    u_idx = u_norm.round().long().clamp(0, bins_w - 1)
+    v_idx = v_norm.round().long().clamp(0, bins_h - 1)
+
+    flat_idx = v_idx * bins_w + u_idx
+    flat_counts = torch.bincount(flat_idx, minlength=bins_h * bins_w).to(torch.float32)
+    local_counts = flat_counts[flat_idx].clamp_min(1.0)
+
+    # Spread render-time top-k selection across target-image coverage instead of
+    # repeatedly spending the budget in already-dense projected regions.
+    local_weight = torch.rsqrt(local_counts)
+    local_weight = local_weight / local_weight.mean().clamp_min(1e-6)
+    weight[mask] = local_weight
+    return weight
+
+
 def _debug_rasterize_support(rasterizer, means3D, scales, rotations, opacity, colors_precomp):
     image, _ = rasterizer(
         means3D=means3D,
@@ -417,7 +439,7 @@ def render_scene(
     means3d_out = outputs.get("means3D")
 
     if d_xyz.ndim == 5:
-        num_views = depth_all.shape[1]
+        num_views = d_xyz.shape[0]
         num_surfaces = d_xyz.shape[1]
         d_xyz = d_xyz.view(num_views, num_surfaces, 3, d_xyz.shape[-2], d_xyz.shape[-1])
         scales_out = scales_out.view(num_views, num_surfaces, 3, scales_out.shape[-2], scales_out.shape[-1])
@@ -504,10 +526,20 @@ def render_scene(
     projected_radius_x_px = K_selection[0, 0].abs() * scales[:, 0] / depth_safe
     projected_radius_y_px = K_selection[1, 1].abs() * scales[:, 1] / depth_safe
     screen_support = torch.sqrt((projected_radius_x_px * projected_radius_y_px).clamp_min(1e-12)).clamp(max=64.0)
+    support_for_selection = screen_support.clamp_min(1.0)
+    coverage_balance = _coverage_balancing_weight(
+        projection_stats_all["u"],
+        projection_stats_all["v"],
+        projection_stats_all["inside_image"],
+        H,
+        W,
+    )
+    inside_image_float = projection_stats_all["inside_image"].to(opacity.dtype)
     selection_score = (
         opacity.squeeze(-1)
-        * screen_support
-        * projection_stats_all["inside_image"].to(opacity.dtype)
+        * support_for_selection
+        * coverage_balance.to(opacity.dtype)
+        * inside_image_float
     )
     kept_after_threshold = num_gaussians_total
     selection_strategy = "threshold_only"
@@ -615,6 +647,8 @@ def render_scene(
             projected_radius_x_px=projected_radius_x_px,
             projected_radius_y_px=projected_radius_y_px,
             screen_support=screen_support,
+            support_for_selection=support_for_selection,
+            coverage_balance=coverage_balance,
             preselection_inside_image_fraction=projection_stats_all["inside_image_fraction"],
             selection_strategy=selection_strategy,
             per_view_budget=per_view_budget,

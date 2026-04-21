@@ -303,6 +303,7 @@ def main():
     parser.add_argument('--num_view', type=int, default=None, help='Number of input views / demo input features')
     parser.add_argument('--num_workers', type=int, default=None, help='Override config dataloader num_workers')
     parser.add_argument('--pin_memory', type=int, choices=[0, 1], default=None, help='Override config dataloader pin_memory with 0/1')
+    parser.add_argument('--center_square_crop', type=int, choices=[0, 1], default=None, help='Center-crop each frame to the largest square and adjust intrinsics')
     parser.add_argument('--save_every_n_epochs', type=int, default=None, help='Override config checkpoint save frequency')
     parser.add_argument('--save_dir_name', type=str, default=None, help='Override the last folder name of config.training.save_dir')
     parser.add_argument('--enable_scene_scan', type=int, choices=[0, 1], default=1, help='Enable or disable dataset scene scanning with 0/1')
@@ -315,6 +316,7 @@ def main():
     parser.add_argument('--render_topk_gaussians', type=int, default=None, help='Override the render-time top-k Gaussian budget')
     parser.add_argument('--emission_mode', type=str, choices=['upsampled_grid', 'pixel_aligned'], default=None, help='Choose coarse-grid or pixel-aligned Gaussian emission')
     parser.add_argument('--pixel_aligned_stride', type=int, default=None, help='Emit on every Nth image pixel when using pixel-aligned emission')
+    parser.add_argument('--emission_num_reference_views', type=int, default=None, help='Emit Gaussians from only this many reference views')
     parser.add_argument('--learning_rate', type=float, default=None, help='Override optimizer learning rate')
     parser.add_argument('--color_mode', type=str, choices=['rgb', 'sh'], default=None, help='Choose direct RGB colors or spherical harmonics colors')
     parser.add_argument('--sh_degree', type=int, default=None, help='Override spherical harmonics degree when color_mode=sh')
@@ -332,6 +334,8 @@ def main():
         config.data.num_workers = args.num_workers
     if args.pin_memory is not None:
         config.data.pin_memory = bool(args.pin_memory)
+    if args.center_square_crop is not None:
+        config.data.center_square_crop = bool(args.center_square_crop)
     if args.save_every_n_epochs is not None:
         config.training.save_every_n_epochs = args.save_every_n_epochs
     if args.save_dir_name is not None:
@@ -348,6 +352,8 @@ def main():
         config.model.emission_mode = args.emission_mode
     if args.pixel_aligned_stride is not None:
         config.model.pixel_aligned_stride = args.pixel_aligned_stride
+    if args.emission_num_reference_views is not None:
+        config.model.emission_num_reference_views = args.emission_num_reference_views
     if args.learning_rate is not None:
         config.training.learning_rate = args.learning_rate
     if args.color_mode is not None:
@@ -389,8 +395,10 @@ def main():
     print(f"Using num_view: {config.data.n_input_views}")
     print(f"Using num_workers: {config.data.num_workers}")
     print(f"Using pin_memory: {config.data.pin_memory}")
+    print(f"Center square crop: {config.data.center_square_crop}")
     print(f"Emission mode: {config.model.emission_mode}")
     print(f"Pixel aligned stride: {config.model.pixel_aligned_stride}")
+    print(f"Emission reference views: {config.model.emission_num_reference_views}")
     print(f"Color mode: {config.model.color_mode}")
     print(f"SH degree: {config.model.sh_degree}")
     print(f"Gaussian per cell: {config.model.gaussian_per_cell}")
@@ -455,7 +463,10 @@ def main():
     tb_writer = SummaryWriter(log_dir=tb_log_dir) if config.training.enable_tensorboard else None
 
     # TODO Dataset load
-    dataset_manager = RealEstate10KDataset(config.data.data_root)
+    dataset_manager = RealEstate10KDataset(
+        config.data.data_root,
+        center_square_crop=config.data.center_square_crop,
+    )
     if args.enable_scene_scan:
         dataset_manager.filter_re10k_scenes(config.data.data_root, config.data.n_input_views)
     if args.max_valid_scenes is not None:
@@ -479,6 +490,7 @@ def main():
         "dataset_ready",
         data_root=config.data.data_root,
         scene_scan_enabled=bool(args.enable_scene_scan),
+        center_square_crop=config.data.center_square_crop,
         num_scenes=len(dataset_manager.scenes),
         max_valid_scenes=args.max_valid_scenes,
         overfit_scene_index=args.overfit_scene_index,

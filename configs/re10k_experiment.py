@@ -185,6 +185,7 @@ class DataConfig:
     num_workers: int = 2
     shuffle: bool = True
     pin_memory: bool = False
+    center_square_crop: bool = False
     n_input_views: int = 8
     min_input_views: int = 4
     input_view_sampling: str = "pose_sparse"
@@ -199,10 +200,11 @@ class ModelConfig:
     dino_name: str = "facebook/dinov3-vit7b16-pretrain-lvd1689m"
     color_mode: str = "rgb"
     sh_degree: int = 2
-    gaussian_per_cell: int = 2
+    gaussian_per_cell: int = 1
     emission_mode: str = "pixel_aligned"
     emission_grid_upsample: int = 2
     pixel_aligned_stride: int = 1
+    emission_num_reference_views: int = 1
     emission_feat_dim: int = 64
     gaussian_head_hidden: int = 64
     freeze_dino: bool = True
@@ -237,7 +239,7 @@ class TrainingConfig:
     lambda_opacity_reg: float = 5e-5
     multiview_depth_num_neighbors: int = 1
     render_opacity_threshold: float = 0.001
-    render_topk_gaussians: int | None = 524288
+    render_topk_gaussians: int | None = 1048576
     save_every_n_epochs: int = 10
     emit_stride: int = 1
     max_scenes_per_epoch: int | None = 200

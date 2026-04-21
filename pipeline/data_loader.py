@@ -16,11 +16,12 @@ Dataset Loader
 
 class RealEstate10KDataset(Dataset):
 
-    def __init__(self, root, transform=None):
+    def __init__(self, root, transform=None, center_square_crop=False):
 
         self.root = Path(root)
         self.scenes = sorted((self.root / "scenes").glob("*"))
         self.transform = transform
+        self.center_square_crop = bool(center_square_crop)
         self.freeze_view_sampling = False
         self.fixed_target_idx = None
         self.fixed_train_indices = None
@@ -28,6 +29,36 @@ class RealEstate10KDataset(Dataset):
 
         if len(self.scenes) == 0:
             raise RuntimeError(f"No scenes found in {self.root}")
+
+    @staticmethod
+    def _center_square_crop_image_and_intrinsics(img, K):
+        height, width = img.shape[:2]
+        side = min(height, width)
+
+        if side <= 0:
+            raise ValueError(f"Invalid image size for crop: {(height, width)}")
+
+        top = max(0, (height - side) // 2)
+        left = max(0, (width - side) // 2)
+        bottom = top + side
+        right = left + side
+
+        cropped_img = img[top:bottom, left:right]
+
+        fx_px = float(K[0, 0]) * width
+        fy_px = float(K[1, 1]) * height
+        cx_px = float(K[0, 2]) * width - left
+        cy_px = float(K[1, 2]) * height - top
+
+        cropped_K = np.array(
+            [
+                [fx_px / side, 0.0, cx_px / side],
+                [0.0, fy_px / side, cy_px / side],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=np.float32,
+        )
+        return cropped_img, cropped_K
 
     def configure_training_case(
         self,
@@ -466,6 +497,8 @@ class RealEstate10KDataset(Dataset):
                     continue
 
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                if self.center_square_crop:
+                    img, K = self._center_square_crop_image_and_intrinsics(img, K)
 
                 if self.transform:
                     img = self.transform(img)

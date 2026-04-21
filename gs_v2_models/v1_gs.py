@@ -61,6 +61,20 @@ def _select_reference_view_index(num_view):
     return num_view // 2
 
 
+def _select_emission_view_indices(num_view, num_emit_views):
+    num_emit_views = max(1, min(int(num_emit_views), int(num_view)))
+    if num_emit_views >= num_view:
+        return list(range(num_view))
+
+    center_idx = _select_reference_view_index(num_view)
+    start_idx = max(0, center_idx - (num_emit_views // 2))
+    end_idx = start_idx + num_emit_views
+    if end_idx > num_view:
+        end_idx = num_view
+        start_idx = end_idx - num_emit_views
+    return list(range(start_idx, end_idx))
+
+
 def _resolve_emission_hw(mode, image_hw, coarse_hw, stride):
     if mode == "pixel_aligned":
         image_h, image_w = image_hw
@@ -101,6 +115,10 @@ class V1GSModel(nn.Module):
             1,
             int(getattr(self.config.model, "pixel_aligned_stride", 1)),
         )
+        self.emission_num_reference_views = max(
+            1,
+            int(getattr(self.config.model, "emission_num_reference_views", self.num_view)),
+        )
         self.emission_feat_dim = max(
             16,
             int(getattr(self.config.model, "emission_feat_dim", 64)),
@@ -123,6 +141,10 @@ class V1GSModel(nn.Module):
             freeze=self.config.model.freeze_dino,
         )
         self.reference_view_idx = _select_reference_view_index(self.num_view)
+        self.emission_view_indices = _select_emission_view_indices(
+            self.num_view,
+            self.emission_num_reference_views,
+        )
         self.warp_feat_dim = 256
         self.dino_to_warp = nn.Conv2d(4096, self.warp_feat_dim, kernel_size=1)
         self.warp_to_dino = nn.Conv2d(self.warp_feat_dim, 4096, kernel_size=1)
@@ -354,12 +376,29 @@ class V1GSModel(nn.Module):
             emit_h,
             emit_w,
         )
-        flat_features = head_feature_map.reshape(batch_size * num_view, self.emission_feat_dim, emit_h, emit_w)
-        flat_rgb = rgb_emission_map.reshape(batch_size * num_view, channels, emit_h, emit_w)
+        emission_view_indices = [
+            idx for idx in self.emission_view_indices
+            if 0 <= idx < num_view
+        ]
+        if not emission_view_indices:
+            emission_view_indices = [min(self.reference_view_idx, num_view - 1)]
+        emission_index_tensor = torch.tensor(
+            emission_view_indices,
+            device=inputs.device,
+            dtype=torch.long,
+        )
+        num_emit_views = int(emission_index_tensor.numel())
+
+        emit_feature_map = head_feature_map.index_select(1, emission_index_tensor)
+        emit_rgb_map = rgb_emission_map.index_select(1, emission_index_tensor)
+        flat_features = emit_feature_map.reshape(batch_size * num_emit_views, self.emission_feat_dim, emit_h, emit_w)
+        flat_rgb = emit_rgb_map.reshape(batch_size * num_emit_views, channels, emit_h, emit_w)
 
         train_w2c = torch.inverse(train_poses)
-        flat_extrinsics = train_w2c.reshape(batch_size * num_view, train_w2c.shape[-2], train_w2c.shape[-1])
-        flat_intrinsics = scaled_intrinsics_emission.reshape(batch_size * num_view, 3, 3)
+        emit_w2c = train_w2c.index_select(1, emission_index_tensor)
+        emit_intrinsics = scaled_intrinsics_emission.index_select(1, emission_index_tensor)
+        flat_extrinsics = emit_w2c.reshape(batch_size * num_emit_views, emit_w2c.shape[-2], emit_w2c.shape[-1])
+        flat_intrinsics = emit_intrinsics.reshape(batch_size * num_emit_views, 3, 3)
         if not self._printed_intrinsics_debug:
             intr0 = flat_intrinsics[0].detach().cpu()
             looks_normalized = (
@@ -373,8 +412,10 @@ class V1GSModel(nn.Module):
             print(f"looks_normalized={looks_normalized}")
             self._printed_intrinsics_debug = True
 
-        depth_low = depth_emission_all.reshape(batch_size * num_view, 1, emit_h, emit_w).detach()
-        conf_low = conf_emission_all.reshape(batch_size * num_view, 1, emit_h, emit_w).detach()
+        emit_depth_all = depth_emission_all.index_select(1, emission_index_tensor)
+        emit_conf_all = conf_emission_all.index_select(1, emission_index_tensor)
+        depth_low = emit_depth_all.reshape(batch_size * num_emit_views, 1, emit_h, emit_w).detach()
+        conf_low = emit_conf_all.reshape(batch_size * num_emit_views, 1, emit_h, emit_w).detach()
         flat_depth = depth_low
 
         outputs = self.gaussian_head(
@@ -398,7 +439,7 @@ class V1GSModel(nn.Module):
                 vggt_prefix_tokens=vggt_prefix_tokens,
                 vggt_spatial_map=vggt_spatial_map,
                 vggt_spatial_low=vggt_spatial_low,
-                emission_reference_views=list(range(num_view)),
+                emission_reference_views=emission_view_indices,
                 projected_vggt_ref=projected_vggt_ref,
                 ref_conf_fusion=ref_conf_fusion,
                 src_agg_feature_map=src_agg_feature_map,
@@ -412,7 +453,7 @@ class V1GSModel(nn.Module):
                 color_mode=self.color_mode,
                 fusion_hw=[fusion_h, fusion_w],
                 emission_hw=[emit_h, emit_w],
-                head_feature_map=head_feature_map,
+                head_feature_map=emit_feature_map,
                 flat_features=flat_features,
                 flat_rgb=flat_rgb,
                 fused_map=fused_map,
@@ -436,7 +477,7 @@ class V1GSModel(nn.Module):
         return {
             "guaussian_outputs": outputs,
             "features": dino_features,
-            "fused_map": head_feature_map,
+            "fused_map": emit_feature_map,
             "fusion_map_coarse": fused_map,
             "depth": depth_all,
             "depth_conf": depth_conf_all,
