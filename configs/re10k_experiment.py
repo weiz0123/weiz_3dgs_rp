@@ -198,7 +198,7 @@ class ModelConfig:
     model_version: str = "v(-1)_gs"
     dino_name: str = "facebook/dinov3-vit7b16-pretrain-lvd1689m"
     color_mode: str = "sh"
-    sh_degree: int = 3
+    sh_degree: int = 2
     gaussian_per_cell: int = 1
     emission_mode: str = "pixel_aligned"
     emission_grid_upsample: int = 2

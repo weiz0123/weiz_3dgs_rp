@@ -9,26 +9,6 @@ from .v1_vggt_encoder import V1VGGTEncoder
 from .v1_gaussian_head import DepthAnchoredGaussianHead
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 
-def _infer_token_grid(num_tokens, aspect_ratio):
-    if num_tokens <= 0:
-        raise ValueError(f"num_tokens must be positive, got {num_tokens}")
-
-    best_h = 1
-    best_w = num_tokens
-    best_err = float("inf")
-
-    for h in range(1, int(num_tokens ** 0.5) + 1):
-        if num_tokens % h != 0:
-            continue
-        w = num_tokens // h
-        err = abs((w / h) - aspect_ratio)
-        if err < best_err:
-            best_h = h
-            best_w = w
-            best_err = err
-
-    return best_h, best_w
-
 
 def _compute_padded_hw(height, width, patch_h, patch_w):
     pad_h = (patch_h - (height % patch_h)) % patch_h
