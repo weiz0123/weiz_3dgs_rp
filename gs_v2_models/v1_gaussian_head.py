@@ -189,7 +189,7 @@ class DepthAnchoredGaussianHead(nn.Module):
         opacity_gate = valid_expanded * conf_gate * (0.25 + 0.75 * depth_positive_expanded)
         scale_gate = 0.75 + 0.25 * conf_gate
 
-        d_xyz = 0.001 * torch.tanh(dxyz_raw) * offset_gate
+        d_xyz = 0.01 * torch.tanh(dxyz_raw) * offset_gate
         base_scales = torch.exp(s_raw - 6.0).clamp(min=self.min_scale, max=self.max_scale)
         quat = F.normalize(q_raw, dim=2, eps=1e-6)
         opacity = torch.sigmoid(a_raw) * opacity_gate

@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 from debug_util import DEBUG
-from .dense_transformer import DenseFusionTransformer
+from gs_models.mvv2_geometry import scale_intrinsics_batch, warp_feature_to_ref_plane
 from .v1_dino_encoder import DinoV3DenseEncoder
 from .v1_vggt_encoder import V1VGGTEncoder
 from .v1_gaussian_head import DepthAnchoredGaussianHead
@@ -73,6 +73,14 @@ def _extract_vggt_spatial_map(tokens, padded_hw, patch_h, patch_w):
     return token_tensor, spatial_map, prefix_tokens
 
 
+def _select_reference_view_index(num_view):
+    if num_view <= 1:
+        return 0
+    if num_view % 2 == 0:
+        return max(0, (num_view // 2) - 1)
+    return num_view // 2
+
+
 
 class V1GSModel(nn.Module):
     def __init__(self, num_view=8, gaussian_per_pixel=2, sh_degree=2, config=None):
@@ -101,16 +109,10 @@ class V1GSModel(nn.Module):
             model_name=self.config.model.dino_name,
             freeze=self.config.model.freeze_dino,
         )
-        self.fusion_transformer = DenseFusionTransformer(
-            vggt_dim=2048, 
-            dino_dim=4096,  
-            depth=2, 
-            num_heads=8
-        )
-        self.vggt_to_dino = nn.Sequential(
-            nn.LayerNorm(2048),
-            nn.Linear(2048, 4096),
-        )
+        self.reference_view_idx = _select_reference_view_index(self.num_view)
+        self.vggt_map_to_dino = nn.Conv2d(2048, 4096, kernel_size=1)
+        self.src_agg_logit = nn.Parameter(torch.tensor(-0.5))
+        self.vggt_ref_logit = nn.Parameter(torch.tensor(-1.1))
 
         self.gaussian_head = DepthAnchoredGaussianHead(
             feat_dim=4096, # Output dimension of dino features
@@ -151,23 +153,26 @@ class V1GSModel(nn.Module):
         if train_poses.ndim == 3:
             train_poses = train_poses.unsqueeze(0)
 
-        # DINO features
         dino_features, _ = self.dino(inputs)
         feat_h, feat_w = dino_features.shape[-2:]
-        dino_token_grid = dino_features.permute(0, 1, 3, 4, 2).reshape(
-            batch_size,
-            num_view,
-            feat_h * feat_w,
-            dino_features.shape[2],
-        )
+        emit_h = feat_h * self.emission_grid_upsample
+        emit_w = feat_w * self.emission_grid_upsample
+        if self.emission_grid_upsample > 1:
+            dino_emission_map = F.interpolate(
+                dino_features.reshape(batch_size * num_view, dino_features.shape[2], feat_h, feat_w),
+                size=(emit_h, emit_w),
+                mode="bilinear",
+                align_corners=False,
+            ).reshape(batch_size, num_view, dino_features.shape[2], emit_h, emit_w)
+        else:
+            dino_emission_map = dino_features
 
-        # VGGT outputs
         vggt_outputs = self.vggt(inputs)
         vggt_tokens_all = vggt_outputs["tokens"]
         depth_all = vggt_outputs["depth"]
         depth_conf_all = vggt_outputs["depth_conf"]
-        extrinsic_all = vggt_outputs["estimated_extrinsics"] # not used currently
-        intrinsic_all = vggt_outputs["estimated_intrinsics"] # not used currently
+        extrinsic_all = vggt_outputs["estimated_extrinsics"]
+        intrinsic_all = vggt_outputs["estimated_intrinsics"]
 
         padded_hw = _compute_padded_hw(height, width, self.patch_h, self.patch_w)
         vggt_token_tensor, vggt_spatial_map, vggt_prefix_tokens = _extract_vggt_spatial_map(
@@ -177,52 +182,81 @@ class V1GSModel(nn.Module):
             patch_w=self.patch_w,
         )
         vggt_spatial_low = F.interpolate(
-            vggt_spatial_map.reshape(batch_size * num_view, vggt_spatial_map.shape[2], vggt_spatial_map.shape[3], vggt_spatial_map.shape[4]),
-            size=(feat_h, feat_w),
+            vggt_spatial_map.reshape(
+                batch_size * num_view,
+                vggt_spatial_map.shape[2],
+                vggt_spatial_map.shape[3],
+                vggt_spatial_map.shape[4],
+            ),
+            size=(emit_h, emit_w),
             mode="bilinear",
             align_corners=False,
-        ).reshape(batch_size, num_view, vggt_spatial_map.shape[2], feat_h, feat_w)
-        vggt_token_grid = vggt_spatial_low.permute(0, 1, 3, 4, 2).reshape(
-            batch_size,
-            num_view,
-            feat_h * feat_w,
-            vggt_spatial_low.shape[2],
+        ).reshape(batch_size, num_view, vggt_spatial_map.shape[2], emit_h, emit_w)
+
+        ref_view_idx = min(self.reference_view_idx, num_view - 1)
+        ref_feature_map = dino_emission_map[:, ref_view_idx]
+        ref_vggt_map = vggt_spatial_low[:, ref_view_idx]
+        projected_vggt_ref = self.vggt_map_to_dino(ref_vggt_map)
+
+        ref_depth_low = F.interpolate(
+            depth_all[:, ref_view_idx],
+            size=(emit_h, emit_w),
+            mode="bilinear",
+            align_corners=False,
         )
-        fused_vggt_tokens = self.fusion_transformer(
-            vggt_tokens=vggt_token_grid,
-            dino_tokens=dino_token_grid,
-        )
-        fused_features = dino_token_grid + self.vggt_to_dino(fused_vggt_tokens)
-        fused_map = fused_features.reshape(
-            batch_size,
-            num_view,
-            feat_h,
-            feat_w,
-            dino_features.shape[2],
-        ).permute(0, 1, 4, 2, 3).contiguous()
-        emit_h = feat_h * self.emission_grid_upsample
-        emit_w = feat_w * self.emission_grid_upsample
-        if self.emission_grid_upsample > 1:
-            head_feature_map = F.interpolate(
-                fused_map.reshape(batch_size * num_view, fused_map.shape[2], feat_h, feat_w),
-                size=(emit_h, emit_w),
-                mode="bilinear",
-                align_corners=False,
-            ).reshape(batch_size, num_view, fused_map.shape[2], emit_h, emit_w)
-        else:
-            head_feature_map = fused_map
-        flat_features = head_feature_map.reshape(
-            batch_size * num_view,
-            head_feature_map.shape[2],
-            emit_h,
-            emit_w,
+        ref_conf_low = F.interpolate(
+            depth_conf_all[:, ref_view_idx],
+            size=(emit_h, emit_w),
+            mode="bilinear",
+            align_corners=False,
         )
 
-        flat_depth = depth_all.reshape(batch_size * num_view, 1, height, width).detach()
-        flat_depth_conf = depth_conf_all.reshape(batch_size * num_view, 1, height, width).detach()
+        scaled_intrinsics = scale_intrinsics_batch(
+            train_intrinsics.reshape(batch_size * num_view, 3, 3),
+            src_hw=(height, width),
+            dst_hw=(emit_h, emit_w),
+        ).reshape(batch_size, num_view, 3, 3)
+
+        warped_feature_sum = torch.zeros_like(ref_feature_map)
+        warped_valid_sum = torch.zeros(
+            batch_size,
+            1,
+            emit_h,
+            emit_w,
+            device=inputs.device,
+            dtype=ref_feature_map.dtype,
+        )
+        for src_view_idx in range(num_view):
+            if src_view_idx == ref_view_idx:
+                continue
+            warped_src, warped_valid = warp_feature_to_ref_plane(
+                src_feat=dino_emission_map[:, src_view_idx],
+                depth_plane=ref_depth_low,
+                K_ref=scaled_intrinsics[:, ref_view_idx],
+                c2w_ref=train_poses[:, ref_view_idx],
+                K_src=scaled_intrinsics[:, src_view_idx],
+                c2w_src=train_poses[:, src_view_idx],
+            )
+            warped_feature_sum = warped_feature_sum + warped_src * warped_valid
+            warped_valid_sum = warped_valid_sum + warped_valid
+
+        src_agg_feature_map = warped_feature_sum / warped_valid_sum.clamp(min=1.0)
+        src_valid_fraction = (warped_valid_sum / max(num_view - 1, 1)).clamp(0.0, 1.0)
+        src_agg_weight = torch.sigmoid(self.src_agg_logit)
+        vggt_ref_weight = torch.sigmoid(self.vggt_ref_logit)
+        fused_ref_map = (
+            ref_feature_map
+            + src_agg_weight * src_valid_fraction * src_agg_feature_map
+            + vggt_ref_weight * projected_vggt_ref
+        )
+
+        fused_map = fused_ref_map.unsqueeze(1)
+        head_feature_map = fused_map
+        flat_features = fused_ref_map
+
         train_w2c = torch.inverse(train_poses)
-        flat_extrinsics = train_w2c.reshape(batch_size * num_view, train_w2c.shape[-2], train_w2c.shape[-1])
-        flat_intrinsics = train_intrinsics.reshape(batch_size * num_view, 3, 3)
+        flat_extrinsics = train_w2c[:, ref_view_idx]
+        flat_intrinsics = train_intrinsics[:, ref_view_idx]
         if not self._printed_intrinsics_debug:
             intr0 = flat_intrinsics[0].detach().cpu()
             looks_normalized = (
@@ -236,18 +270,9 @@ class V1GSModel(nn.Module):
             print(f"looks_normalized={looks_normalized}")
             self._printed_intrinsics_debug = True
 
-        depth_low = F.interpolate(
-            flat_depth,
-            size=(emit_h, emit_w),
-            mode="bilinear",
-            align_corners=False,
-        )
-        conf_low = F.interpolate(
-            flat_depth_conf,
-            size=(emit_h, emit_w),
-            mode="bilinear",
-            align_corners=False,
-        )
+        flat_depth = ref_depth_low.detach()
+        depth_low = flat_depth
+        conf_low = ref_conf_low.detach()
 
         outputs = self.gaussian_head(
                 feat=flat_features,
@@ -262,12 +287,19 @@ class V1GSModel(nn.Module):
                 "v1_gs_forward",
                 inputs=inputs,
                 dino_features=dino_features,
-                dino_token_grid=dino_token_grid,
+                dino_emission_map=dino_emission_map,
                 vggt_token_tensor=vggt_token_tensor,
                 vggt_prefix_tokens=vggt_prefix_tokens,
                 vggt_spatial_map=vggt_spatial_map,
                 vggt_spatial_low=vggt_spatial_low,
-                fused_vggt_tokens=fused_vggt_tokens,
+                reference_view_idx=ref_view_idx,
+                ref_feature_map=ref_feature_map,
+                ref_vggt_map=ref_vggt_map,
+                projected_vggt_ref=projected_vggt_ref,
+                src_agg_feature_map=src_agg_feature_map,
+                src_valid_fraction=src_valid_fraction,
+                src_agg_weight=src_agg_weight,
+                vggt_ref_weight=vggt_ref_weight,
                 emission_grid_upsample=self.emission_grid_upsample,
                 emission_hw=[emit_h, emit_w],
                 head_feature_map=head_feature_map,
@@ -291,7 +323,7 @@ class V1GSModel(nn.Module):
             "guaussian_outputs": outputs,
             "features": dino_features,
             "fused_map": fused_map,
-            "depth": depth_all,
+            "depth": depth_all[:, ref_view_idx:ref_view_idx + 1],
             "depth_low": depth_low,
             "conf_low": conf_low,
             "estimated_extrinsics": extrinsic_all.float(),
