@@ -18,6 +18,18 @@ class ConvBlock(nn.Module):
         return self.block(x)
 
 
+def _intrinsics_to_pixel_units(intrinsic, height, width, dtype):
+    intrinsic = intrinsic.to(dtype).clone()
+    max_f = torch.max(intrinsic[..., 0, 0].abs().amax(), intrinsic[..., 1, 1].abs().amax())
+    max_c = torch.max(intrinsic[..., 0, 2].abs().amax(), intrinsic[..., 1, 2].abs().amax())
+    if max_f < 10.0 and max_c <= 2.0:
+        intrinsic[..., 0, 0] = intrinsic[..., 0, 0] * width
+        intrinsic[..., 1, 1] = intrinsic[..., 1, 1] * height
+        intrinsic[..., 0, 2] = intrinsic[..., 0, 2] * width
+        intrinsic[..., 1, 2] = intrinsic[..., 1, 2] * height
+    return intrinsic
+
+
 def _depth_to_world_points(depth, intrinsic, extrinsic):
     """
     Backproject depth into world-space points.
@@ -34,14 +46,7 @@ def _depth_to_world_points(depth, intrinsic, extrinsic):
     device = depth.device
     dtype = depth.dtype
 
-    intrinsic = intrinsic.to(dtype).clone()
-    max_f = torch.max(intrinsic[..., 0, 0].abs().amax(), intrinsic[..., 1, 1].abs().amax())
-    max_c = torch.max(intrinsic[..., 0, 2].abs().amax(), intrinsic[..., 1, 2].abs().amax())
-    if max_f < 10.0 and max_c <= 2.0:
-        intrinsic[..., 0, 0] = intrinsic[..., 0, 0] * w
-        intrinsic[..., 1, 1] = intrinsic[..., 1, 1] * h
-        intrinsic[..., 0, 2] = intrinsic[..., 0, 2] * w
-        intrinsic[..., 1, 2] = intrinsic[..., 1, 2] * h
+    intrinsic = _intrinsics_to_pixel_units(intrinsic, h, w, dtype)
 
     y, x = torch.meshgrid(
         torch.arange(h, device=device, dtype=dtype),
@@ -198,8 +203,9 @@ class DepthAnchoredGaussianHead(nn.Module):
 
         d_xyz = 0.05 * torch.tanh(dxyz_raw) * offset_gate
 
-        fx = intrinsic[:, 0, 0].abs().clamp_min(1.0).view(batch_size, 1, 1, 1)
-        fy = intrinsic[:, 1, 1].abs().clamp_min(1.0).view(batch_size, 1, 1, 1)
+        intrinsic_for_scale = _intrinsics_to_pixel_units(intrinsic, height, width, raw.dtype)
+        fx = intrinsic_for_scale[:, 0, 0].abs().clamp_min(1.0).view(batch_size, 1, 1, 1)
+        fy = intrinsic_for_scale[:, 1, 1].abs().clamp_min(1.0).view(batch_size, 1, 1, 1)
         pixel_scale_x = depth_for_points / fx
         pixel_scale_y = depth_for_points / fy
         pixel_scale_z = 0.5 * (pixel_scale_x + pixel_scale_y)
@@ -246,7 +252,10 @@ class DepthAnchoredGaussianHead(nn.Module):
                 depth=depth,
                 depth_for_points=depth_for_points,
                 intrinsic=intrinsic,
+                intrinsic_for_scale=intrinsic_for_scale,
                 extrinsic=extrinsic,
+                scale_fx=fx,
+                scale_fy=fy,
                 conf=conf,
                 finite_depth=finite_depth,
                 depth_positive_gate=depth_positive_gate,
