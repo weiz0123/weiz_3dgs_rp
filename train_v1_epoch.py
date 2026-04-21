@@ -363,7 +363,15 @@ def _project_points_to_image(points_world, target_extrinsic, target_intrinsic, H
     }
 
 
-def _center_heatmap(u, v, mask, H, W, bins_h=45, bins_w=80):
+def _debug_grid_shape(H, W, downsample=8):
+    bins_h = max(1, int(np.ceil(float(H) / float(downsample))))
+    bins_w = max(1, int(np.ceil(float(W) / float(downsample))))
+    return bins_h, bins_w
+
+
+def _center_heatmap(u, v, mask, H, W, bins_h=None, bins_w=None):
+    if bins_h is None or bins_w is None:
+        bins_h, bins_w = _debug_grid_shape(H, W)
     heatmap = torch.zeros((bins_h, bins_w), device=u.device, dtype=torch.float32)
     if mask.sum().item() == 0:
         return heatmap
@@ -380,7 +388,9 @@ def _center_heatmap(u, v, mask, H, W, bins_h=45, bins_w=80):
     return heatmap / heatmap.max().clamp_min(1.0)
 
 
-def _coverage_balancing_weight(u, v, mask, H, W, bins_h=45, bins_w=80):
+def _coverage_balancing_weight(u, v, mask, H, W, bins_h=None, bins_w=None):
+    if bins_h is None or bins_w is None:
+        bins_h, bins_w = _debug_grid_shape(H, W)
     weight = torch.zeros_like(u, dtype=torch.float32)
     if mask.sum().item() == 0:
         return weight
