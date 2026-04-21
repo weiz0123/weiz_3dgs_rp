@@ -93,7 +93,7 @@ class DepthAnchoredGaussianHead(nn.Module):
     This head learns appearance and basic Gaussian parameters from image features:
     - `means3D` comes from backprojected depth plus a learned small `delta_xyz`
     - `quat` is predicted and normalized
-    - learned outputs are `delta_xyz`, `scales`, `quat`, `opacity`, and `sh_coeffs`
+    - learned outputs are `delta_xyz`, `scales`, `quat`, `opacity`, and direct RGB colors
     """
 
     def __init__(
@@ -105,6 +105,7 @@ class DepthAnchoredGaussianHead(nn.Module):
         min_scale=0.001,
         max_scale=0.02,
         init_dc_bias=0.5,
+        use_direct_rgb=True,
     ):
         super().__init__()
 
@@ -115,14 +116,16 @@ class DepthAnchoredGaussianHead(nn.Module):
         self.min_scale = min_scale
         self.max_scale = max_scale
         self.init_dc_bias = init_dc_bias
+        self.use_direct_rgb = use_direct_rgb
 
         # Per surface:
         #   3 delta xyz channels
         #   3 scale channels
         #   4 quaternion channels
         #   1 opacity channel
-        #   3 * num_sh_coeffs SH channels
-        self.per_surface_dim = 3 + 3 + 4 + 1 + self.sh_out_dim
+        #   3 direct RGB channels or 3 * num_sh_coeffs SH channels
+        self.color_out_dim = 3 if self.use_direct_rgb else self.sh_out_dim
+        self.per_surface_dim = 3 + 3 + 4 + 1 + self.color_out_dim
         out_dim = self.per_surface_dim * self.num_surfaces
 
         self.net = nn.Sequential(
@@ -145,12 +148,13 @@ class DepthAnchoredGaussianHead(nn.Module):
                 self.out.bias[quat_base] = 1.0
                 opacity_base = base + 10
                 self.out.bias[opacity_base] = -2.0
-                sh_base = base + 11  # 3 dxyz + 3 scale + 4 quat + 1 opacity
-                for color_idx in range(3):
-                    dc_index = sh_base + color_idx * self.sh_coeff_dim
-                    self.out.bias[dc_index] = self.init_dc_bias
+                if not self.use_direct_rgb:
+                    sh_base = base + 11  # 3 dxyz + 3 scale + 4 quat + 1 opacity
+                    for color_idx in range(3):
+                        dc_index = sh_base + color_idx * self.sh_coeff_dim
+                        self.out.bias[dc_index] = self.init_dc_bias
 
-    def forward(self, feat, depth, intrinsic, extrinsic, conf=None):
+    def forward(self, feat, depth, intrinsic, extrinsic, conf=None, rgb=None):
         h = self.net(feat)
 
         raw = self.out(h)
@@ -166,7 +170,7 @@ class DepthAnchoredGaussianHead(nn.Module):
         cursor += 4
         a_raw = raw[:, :, cursor:cursor + 1]
         cursor += 1
-        sh_raw = raw[:, :, cursor:cursor + self.sh_out_dim]
+        color_raw = raw[:, :, cursor:cursor + self.color_out_dim]
 
         finite_depth = torch.isfinite(depth).to(raw.dtype)
         depth = torch.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
@@ -195,14 +199,23 @@ class DepthAnchoredGaussianHead(nn.Module):
         opacity = torch.sigmoid(a_raw) * opacity_gate
         scales = (base_scales * scale_gate).clamp(min=self.min_scale, max=self.max_scale)
 
-        sh_coeffs = sh_raw.view(
-            batch_size,
-            self.num_surfaces,
-            3,
-            self.sh_coeff_dim,
-            height,
-            width,
-        )
+        sh_coeffs = None
+        if self.use_direct_rgb:
+            if rgb is not None:
+                rgb = rgb.to(raw.dtype).unsqueeze(1)
+                colors = (rgb + 0.25 * torch.tanh(color_raw)).clamp(0.0, 1.0)
+            else:
+                colors = torch.sigmoid(color_raw)
+        else:
+            colors = None
+            sh_coeffs = color_raw.view(
+                batch_size,
+                self.num_surfaces,
+                3,
+                self.sh_coeff_dim,
+                height,
+                width,
+            )
 
         base_means = _depth_to_world_points(depth_for_points, intrinsic, extrinsic)
         means3D = base_means.unsqueeze(1) + d_xyz
@@ -229,16 +242,22 @@ class DepthAnchoredGaussianHead(nn.Module):
                 scales=scales,
                 quat=quat,
                 opacity=opacity,
+                colors=colors,
                 sh_coeffs=sh_coeffs,
                 means3D=means3D,
             )
 
-        return {
+        output = {
             "means3D": means3D,
             "d_xyz": d_xyz,
             "scales": scales,
             "quat": quat,
             "opacity": opacity,
-            "sh_coeffs": sh_coeffs,
             "sh_degree": self.sh_degree,
+            "color_mode": "rgb" if self.use_direct_rgb else "sh",
         }
+        if colors is not None:
+            output["colors"] = colors
+        if sh_coeffs is not None:
+            output["sh_coeffs"] = sh_coeffs
+        return output

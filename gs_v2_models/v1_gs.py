@@ -125,6 +125,7 @@ class V1GSModel(nn.Module):
             min_scale=0.001,
             max_scale=0.02,
             init_dc_bias=0.5,
+            use_direct_rgb=True,
             )
 
     def forward(
@@ -169,6 +170,12 @@ class V1GSModel(nn.Module):
             ).reshape(batch_size, num_view, dino_features.shape[2], emit_h, emit_w)
         else:
             dino_emission_map = dino_features
+        rgb_emission_map = F.interpolate(
+            inputs.reshape(batch_size * num_view, channels, height, width),
+            size=(emit_h, emit_w),
+            mode="bilinear",
+            align_corners=False,
+        ).reshape(batch_size, num_view, channels, emit_h, emit_w)
 
         vggt_outputs = self.vggt(inputs)
         vggt_tokens_all = vggt_outputs["tokens"]
@@ -280,6 +287,7 @@ class V1GSModel(nn.Module):
         projected_vggt_ref = torch.stack(projected_vggt_refs, dim=1)
         head_feature_map = fused_map
         flat_features = fused_map.reshape(batch_size * num_view, fused_map.shape[2], emit_h, emit_w)
+        flat_rgb = rgb_emission_map.reshape(batch_size * num_view, channels, emit_h, emit_w)
 
         train_w2c = torch.inverse(train_poses)
         flat_extrinsics = train_w2c.reshape(batch_size * num_view, train_w2c.shape[-2], train_w2c.shape[-1])
@@ -307,6 +315,7 @@ class V1GSModel(nn.Module):
                 intrinsic=flat_intrinsics,
                 extrinsic=flat_extrinsics,
                 conf=conf_low,
+                rgb=flat_rgb,
             )
 
         if DEBUG.is_first_batch():
@@ -315,6 +324,7 @@ class V1GSModel(nn.Module):
                 inputs=inputs,
                 dino_features=dino_features,
                 dino_emission_map=dino_emission_map,
+                rgb_emission_map=rgb_emission_map,
                 dino_warp_map=dino_warp_map,
                 vggt_token_tensor=vggt_token_tensor,
                 vggt_prefix_tokens=vggt_prefix_tokens,
@@ -330,6 +340,7 @@ class V1GSModel(nn.Module):
                 emission_hw=[emit_h, emit_w],
                 head_feature_map=head_feature_map,
                 flat_features=flat_features,
+                flat_rgb=flat_rgb,
                 fused_map=fused_map,
                 depth_all=depth_all,
                 flat_depth=flat_depth,

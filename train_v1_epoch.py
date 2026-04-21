@@ -178,7 +178,8 @@ def render_scene(
     scales_out = outputs["scales"]
     quat_out = outputs["quat"]
     opacity_out = outputs["opacity"]
-    sh_out = outputs["sh_coeffs"]
+    sh_out = outputs.get("sh_coeffs")
+    color_out = outputs.get("colors")
     means3d_out = outputs.get("means3D")
 
     if d_xyz.ndim == 5:
@@ -188,14 +189,23 @@ def render_scene(
         scales_out = scales_out.view(num_views, num_surfaces, 3, scales_out.shape[-2], scales_out.shape[-1])
         quat_out = quat_out.view(num_views, num_surfaces, 4, quat_out.shape[-2], quat_out.shape[-1])
         opacity_out = opacity_out.view(num_views, num_surfaces, 1, opacity_out.shape[-2], opacity_out.shape[-1])
-        sh_out = sh_out.view(
-            num_views,
-            num_surfaces,
-            3,
-            sh_out.shape[3],
-            sh_out.shape[-2],
-            sh_out.shape[-1],
-        )
+        if sh_out is not None:
+            sh_out = sh_out.view(
+                num_views,
+                num_surfaces,
+                3,
+                sh_out.shape[3],
+                sh_out.shape[-2],
+                sh_out.shape[-1],
+            )
+        if color_out is not None:
+            color_out = color_out.view(
+                num_views,
+                num_surfaces,
+                3,
+                color_out.shape[-2],
+                color_out.shape[-1],
+            )
         if means3d_out is not None:
             means3d_out = means3d_out.view(
                 num_views,
@@ -209,7 +219,10 @@ def render_scene(
         scales_out = scales_out[0]
         quat_out = quat_out[0]
         opacity_out = opacity_out[0]
-        sh_out = sh_out[0]
+        if sh_out is not None:
+            sh_out = sh_out[0]
+        if color_out is not None:
+            color_out = color_out[0]
         if means3d_out is not None:
             means3d_out = means3d_out[0]
     else:
@@ -228,8 +241,14 @@ def render_scene(
     opacity = opacity_out.reshape(-1, 1)
     scales  = scales_out.reshape(-1, 3)
     rotations = quat_out.reshape(-1, 4)
-    # SH Coeffs: [V, S, 3, SH, H, W] -> [N, SH, 3]
-    shs = sh_out.permute(0, 1, 4, 5, 3, 2).reshape(-1, sh_out.shape[3], 3)
+    shs = None
+    colors_precomp = None
+    if sh_out is not None:
+        # SH Coeffs: [V, S, 3, SH, H, W] -> [N, SH, 3]
+        shs = sh_out.permute(0, 1, 4, 5, 3, 2).reshape(-1, sh_out.shape[3], 3)
+    if color_out is not None:
+        # RGB colors: [V, S, 3, H, W] -> [N, 3]
+        colors_precomp = color_out.permute(0, 1, 3, 4, 2).reshape(-1, 3)
     num_gaussians_total = int(means3D.shape[0])
 
     opacity_threshold = 0.0
@@ -268,7 +287,10 @@ def render_scene(
     opacity = opacity[keep_mask]
     scales = scales[keep_mask]
     rotations = rotations[keep_mask]
-    shs = shs[keep_mask]
+    if shs is not None:
+        shs = shs[keep_mask]
+    if colors_precomp is not None:
+        colors_precomp = colors_precomp[keep_mask]
     num_gaussians_kept = int(means3D.shape[0])
     camera_stats = _camera_space_point_stats(means3D, target_extrinsic[0])
     depth_positive = camera_stats["camera_depth_positive"]
@@ -284,6 +306,7 @@ def render_scene(
             scales=scales,
             rotations=rotations,
             shs=shs,
+            colors_precomp=colors_precomp,
             num_gaussians_total=num_gaussians_total,
             kept_after_threshold=kept_after_threshold,
             kept_after_topk=kept_after_topk,
@@ -331,7 +354,7 @@ def render_scene(
         scale_modifier=1.0,
         viewmatrix=view_matrix,
         projmatrix=full_proj_matrix,
-        sh_degree=sh_degree,
+        sh_degree=0 if colors_precomp is not None else sh_degree,
         campos=torch.inverse(view_matrix.transpose(-1, -2))[:3, 3],
         prefiltered=False,
         debug=False
@@ -344,7 +367,7 @@ def render_scene(
         means3D = means3D,
         means2D = torch.zeros_like(means3D, device=device, requires_grad=True),
         shs = shs,
-        colors_precomp = None,
+        colors_precomp = colors_precomp,
         opacities = opacity,
         scales = scales,
         rotations = rotations,
