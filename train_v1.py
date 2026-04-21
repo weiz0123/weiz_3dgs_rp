@@ -99,8 +99,32 @@ def visualize_epoch_outputs(stats, save_dir, epoch):
     epoch_output_dir = os.path.join(save_dir, f"epoch_{epoch}_outputs")
     os.makedirs(epoch_output_dir, exist_ok=True)
 
+    def _show_optional(ax, value, title, cmap=None, image_like=False):
+        if value is None:
+            ax.text(0.5, 0.5, "not captured", ha="center", va="center", fontsize=9)
+            ax.set_title(title, fontsize=10, loc="left")
+            ax.axis("off")
+            return
+
+        if image_like:
+            ax.imshow(_to_image_numpy(value))
+        else:
+            ax.imshow(_to_depth_numpy(value), cmap=cmap)
+        ax.set_title(title, fontsize=10, loc="left")
+        ax.axis("off")
+
     _save_rgb_image(os.path.join(epoch_output_dir, "target_image.png"), stats["target_image"])
     _save_rgb_image(os.path.join(epoch_output_dir, "estimated_image.png"), stats["estimated_image"])
+    if stats.get("support_actual_opacity") is not None:
+        _save_rgb_image(
+            os.path.join(epoch_output_dir, "support_actual_opacity.png"),
+            stats["support_actual_opacity"],
+        )
+    if stats.get("support_opacity_one") is not None:
+        _save_rgb_image(
+            os.path.join(epoch_output_dir, "support_opacity_one.png"),
+            stats["support_opacity_one"],
+        )
     for view_idx, input_image in enumerate(stats["train_images"]):
         _save_rgb_image(
             os.path.join(epoch_output_dir, f"input_view_{view_idx:02d}.png"),
@@ -109,10 +133,11 @@ def visualize_epoch_outputs(stats, save_dir, epoch):
 
     fig, axes = plt.subplots(
         1,
-        9,
-        figsize=(45, 5),
+        12,
+        figsize=(60, 5),
         constrained_layout=True,
     )
+    gt_w2c = torch.linalg.inv(stats["train_poses"][0])
 
     axes[0].imshow(_to_image_numpy(stats["target_image"]))
     axes[0].set_title("target image", fontsize=10, loc="left")
@@ -122,28 +147,49 @@ def visualize_epoch_outputs(stats, save_dir, epoch):
     axes[1].set_title("estimated image", fontsize=10, loc="left")
     axes[1].axis("off")
 
-    axes[2].imshow(_to_dino_pca_numpy(stats["dino_features"][0, 0]))
-    axes[2].set_title("dino features", fontsize=10, loc="left")
-    axes[2].axis("off")
+    _show_optional(
+        axes[2],
+        stats.get("support_actual_opacity"),
+        "support actual opacity",
+        image_like=True,
+    )
 
-    axes[3].imshow(_to_depth_numpy(stats["vggt_depth"][0, 0]), cmap="plasma")
-    axes[3].set_title("vggt depth", fontsize=10, loc="left")
-    axes[3].axis("off")
+    _show_optional(
+        axes[3],
+        stats.get("support_opacity_one"),
+        "support opacity=1",
+        image_like=True,
+    )
 
-    axes[4].imshow(_to_dino_pca_numpy(stats["fused_map"][0, 0]))
-    axes[4].set_title("fused map", fontsize=10, loc="left")
+    axes[4].imshow(_to_dino_pca_numpy(stats["dino_features"][0, 0]))
+    axes[4].set_title("dino features", fontsize=10, loc="left")
     axes[4].axis("off")
 
-    axes[5].imshow(_to_depth_numpy(stats["depth_low"][0]), cmap="plasma")
-    axes[5].set_title("depth low", fontsize=10, loc="left")
+    axes[5].imshow(_to_depth_numpy(stats["vggt_depth"][0, 0]), cmap="plasma")
+    axes[5].set_title("vggt depth", fontsize=10, loc="left")
     axes[5].axis("off")
 
-    axes[6].imshow(_to_depth_numpy(stats["conf_low"][0]), cmap="viridis")
-    axes[6].set_title("conf low", fontsize=10, loc="left")
+    axes[6].imshow(_to_dino_pca_numpy(stats["fused_map"][0, 0]))
+    axes[6].set_title("fused map", fontsize=10, loc="left")
     axes[6].axis("off")
 
-    gt_w2c = torch.linalg.inv(stats["train_poses"][0])
-    axes[7].text(
+    axes[7].imshow(_to_depth_numpy(stats["depth_low"][0]), cmap="plasma")
+    axes[7].set_title("depth low", fontsize=10, loc="left")
+    axes[7].axis("off")
+
+    axes[8].imshow(_to_depth_numpy(stats["conf_low"][0]), cmap="viridis")
+    axes[8].set_title("conf low", fontsize=10, loc="left")
+    axes[8].axis("off")
+
+    _show_optional(
+        axes[9],
+        stats.get("projected_center_heatmap"),
+        "projected centers",
+        cmap="magma",
+        image_like=False,
+    )
+
+    axes[10].text(
         0.01,
         0.98,
         "gt extrinsic (w2c):\n"
@@ -155,10 +201,10 @@ def visualize_epoch_outputs(stats, save_dir, epoch):
         family="monospace",
         fontsize=8.5,
     )
-    axes[7].set_title("extrinsics", fontsize=10, loc="left")
-    axes[7].axis("off")
+    axes[10].set_title("extrinsics", fontsize=10, loc="left")
+    axes[10].axis("off")
 
-    axes[8].text(
+    axes[11].text(
         0.01,
         0.98,
         "gt intrinsic:\n"
@@ -170,8 +216,8 @@ def visualize_epoch_outputs(stats, save_dir, epoch):
         family="monospace",
         fontsize=8.5,
     )
-    axes[8].set_title("intrinsics", fontsize=10, loc="left")
-    axes[8].axis("off")
+    axes[11].set_title("intrinsics", fontsize=10, loc="left")
+    axes[11].axis("off")
 
     fig.savefig(os.path.join(save_dir, f"epoch_{epoch}_visualization.png"), dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -269,6 +315,9 @@ def main():
     parser.add_argument('--render_topk_gaussians', type=int, default=None, help='Override the render-time top-k Gaussian budget')
     parser.add_argument('--emission_mode', type=str, choices=['upsampled_grid', 'pixel_aligned'], default=None, help='Choose coarse-grid or pixel-aligned Gaussian emission')
     parser.add_argument('--pixel_aligned_stride', type=int, default=None, help='Emit on every Nth image pixel when using pixel-aligned emission')
+    parser.add_argument('--learning_rate', type=float, default=None, help='Override optimizer learning rate')
+    parser.add_argument('--color_mode', type=str, choices=['rgb', 'sh'], default=None, help='Choose direct RGB colors or spherical harmonics colors')
+    parser.add_argument('--sh_degree', type=int, default=None, help='Override spherical harmonics degree when color_mode=sh')
     
     args = parser.parse_args()
 
@@ -299,6 +348,12 @@ def main():
         config.model.emission_mode = args.emission_mode
     if args.pixel_aligned_stride is not None:
         config.model.pixel_aligned_stride = args.pixel_aligned_stride
+    if args.learning_rate is not None:
+        config.training.learning_rate = args.learning_rate
+    if args.color_mode is not None:
+        config.model.color_mode = args.color_mode
+    if args.sh_degree is not None:
+        config.model.sh_degree = args.sh_degree
     if args.overfit_scene_index is not None:
         config.data.shuffle = False
     if args.freeze_view_sampling:
@@ -336,8 +391,11 @@ def main():
     print(f"Using pin_memory: {config.data.pin_memory}")
     print(f"Emission mode: {config.model.emission_mode}")
     print(f"Pixel aligned stride: {config.model.pixel_aligned_stride}")
+    print(f"Color mode: {config.model.color_mode}")
+    print(f"SH degree: {config.model.sh_degree}")
     print(f"Gaussian per cell: {config.model.gaussian_per_cell}")
     print(f"Render top-k Gaussians: {config.training.render_topk_gaussians}")
+    print(f"Learning rate: {config.training.learning_rate}")
     print(f"Scene scan enabled: {bool(args.enable_scene_scan)}")
     print(f"Max valid scenes: {args.max_valid_scenes}")
     print(f"Overfit scene index: {args.overfit_scene_index}")
@@ -361,7 +419,7 @@ def main():
     if args.model_name == "v1_gs":
         model = V1GSModel(
             num_view=config.data.n_input_views,
-            sh_degree=0,
+            sh_degree=config.model.sh_degree,
             gaussian_per_pixel=config.model.gaussian_per_cell,
             config=config
         ).to(device)

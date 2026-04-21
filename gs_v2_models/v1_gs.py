@@ -120,6 +120,7 @@ class V1GSModel(nn.Module):
             16,
             int(getattr(self.config.model, "gaussian_head_hidden", 64)),
         )
+        self.color_mode = str(getattr(self.config.model, "color_mode", "rgb")).lower()
         self._printed_intrinsics_debug = False
 
 
@@ -146,10 +147,10 @@ class V1GSModel(nn.Module):
             hidden=self.gaussian_head_hidden,
             sh_degree=self.sh_degree,
             num_surfaces=self.gaussian_per_pixel,
-            min_scale=0.001,
-            max_scale=0.02,
+            min_scale=0.002,
+            max_scale=0.05,
             init_dc_bias=0.5,
-            use_direct_rgb=True,
+            use_direct_rgb=(self.color_mode == "rgb"),
             )
 
     def forward(
@@ -402,6 +403,7 @@ class V1GSModel(nn.Module):
                 emission_mode=self.emission_mode,
                 emission_grid_upsample=self.emission_grid_upsample,
                 pixel_aligned_stride=self.pixel_aligned_stride,
+                color_mode=self.color_mode,
                 fusion_hw=[fusion_h, fusion_w],
                 emission_hw=[emit_h, emit_w],
                 head_feature_map=head_feature_map,
@@ -415,6 +417,9 @@ class V1GSModel(nn.Module):
                 flat_extrinsics=flat_extrinsics,
                 depth_low=depth_low,
                 conf_low=conf_low,
+                gaussian_color_mode=outputs.get("color_mode"),
+                gaussian_colors=outputs.get("colors"),
+                gaussian_sh_coeffs=outputs.get("sh_coeffs"),
                 gaussian_means=outputs.get("means3D"),
                 gaussian_scales=outputs.get("scales"),
                 gaussian_opacity=outputs.get("opacity"),

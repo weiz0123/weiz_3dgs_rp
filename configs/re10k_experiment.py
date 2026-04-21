@@ -197,6 +197,8 @@ class DataConfig:
 class ModelConfig:
     model_version: str = "v(-1)_gs"
     dino_name: str = "facebook/dinov3-vit7b16-pretrain-lvd1689m"
+    color_mode: str = "sh"
+    sh_degree: int = 3
     gaussian_per_cell: int = 1
     emission_mode: str = "pixel_aligned"
     emission_grid_upsample: int = 2
@@ -226,7 +228,7 @@ class ModelConfig:
 class TrainingConfig:
     device: str = "auto"
     epochs: int = 400
-    learning_rate: float = 1e-4
+    learning_rate: float = 3e-4
     weight_decay: float = 1e-4
     lambda_ssim: float = 0.2
     lambda_gradient: float = 0.1

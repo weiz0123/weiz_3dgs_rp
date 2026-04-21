@@ -189,12 +189,31 @@ class DepthAnchoredGaussianHead(nn.Module):
         conf_gate = (0.35 + 0.65 * conf).unsqueeze(1)
         edge_expanded = edge_gate.unsqueeze(1)
 
-        offset_gate = valid_expanded * conf_gate * edge_expanded * depth_positive_expanded
+        # Let geometry move under a hard validity mask only. Early confidence/edge
+        # estimates are still noisy, and using them to suppress xyz offsets makes
+        # the model behave like it is glued to the initial depth scaffold.
+        offset_gate = valid_expanded * depth_positive_expanded
         opacity_gate = valid_expanded * conf_gate * (0.25 + 0.75 * depth_positive_expanded)
         scale_gate = 0.75 + 0.25 * conf_gate
 
-        d_xyz = 0.01 * torch.tanh(dxyz_raw) * offset_gate
-        base_scales = torch.exp(s_raw - 6.0).clamp(min=self.min_scale, max=self.max_scale)
+        d_xyz = 0.05 * torch.tanh(dxyz_raw) * offset_gate
+
+        fx = intrinsic[:, 0, 0].abs().clamp_min(1.0).view(batch_size, 1, 1, 1)
+        fy = intrinsic[:, 1, 1].abs().clamp_min(1.0).view(batch_size, 1, 1, 1)
+        pixel_scale_x = depth_for_points / fx
+        pixel_scale_y = depth_for_points / fy
+        pixel_scale_z = 0.5 * (pixel_scale_x + pixel_scale_y)
+        pixel_footprint_scales = torch.cat(
+            [pixel_scale_x, pixel_scale_y, pixel_scale_z],
+            dim=1,
+        ).unsqueeze(1)
+
+        # Use the world-space pixel footprint as the anchor size so Gaussians start
+        # large enough to cover image support at their predicted depth.
+        learned_scale_factor = 0.5 + 2.0 * torch.sigmoid(s_raw)
+        base_scales = (
+            pixel_footprint_scales * learned_scale_factor
+        ).clamp(min=self.min_scale, max=self.max_scale)
         quat = F.normalize(q_raw, dim=2, eps=1e-6)
         opacity = torch.sigmoid(a_raw) * opacity_gate
         scales = (base_scales * scale_gate).clamp(min=self.min_scale, max=self.max_scale)
@@ -237,6 +256,10 @@ class DepthAnchoredGaussianHead(nn.Module):
                 offset_gate=offset_gate,
                 opacity_gate=opacity_gate,
                 scale_gate=scale_gate,
+                rgb=rgb,
+                color_mode="rgb" if self.use_direct_rgb else "sh",
+                pixel_footprint_scales=pixel_footprint_scales,
+                learned_scale_factor=learned_scale_factor,
                 base_means=base_means,
                 d_xyz=d_xyz,
                 scales=scales,

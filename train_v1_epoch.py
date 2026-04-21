@@ -160,6 +160,71 @@ def _camera_space_point_stats(points_world, target_extrinsic):
     }
 
 
+def _project_points_to_image(points_world, target_extrinsic, target_intrinsic, H, W):
+    target_w2c = _to_homogeneous_4x4(target_extrinsic[0])
+    K = _to_pixel_intrinsics(target_intrinsic[0], H, W)
+
+    rotation = target_w2c[:3, :3]
+    translation = target_w2c[:3, 3]
+    points_cam = points_world @ rotation.transpose(0, 1) + translation
+
+    depth = points_cam[:, 2]
+    valid_depth = depth > 1e-4
+    depth_safe = depth.clamp_min(1e-6)
+
+    x = points_cam[:, 0] / depth_safe
+    y = points_cam[:, 1] / depth_safe
+    u = K[0, 0] * x + K[0, 2]
+    v = K[1, 1] * y + K[1, 2]
+
+    inside_image = (
+        valid_depth
+        & (u >= 0.0)
+        & (u <= float(W - 1))
+        & (v >= 0.0)
+        & (v <= float(H - 1))
+    )
+
+    return {
+        "u": u,
+        "v": v,
+        "depth": depth,
+        "inside_image": inside_image,
+        "inside_image_fraction": inside_image.float().mean(),
+    }
+
+
+def _center_heatmap(u, v, mask, H, W, bins_h=45, bins_w=80):
+    heatmap = torch.zeros((bins_h, bins_w), device=u.device, dtype=torch.float32)
+    if mask.sum().item() == 0:
+        return heatmap
+
+    u_norm = (u[mask] / max(W - 1, 1)) * (bins_w - 1)
+    v_norm = (v[mask] / max(H - 1, 1)) * (bins_h - 1)
+    u_idx = u_norm.long().clamp(0, bins_w - 1)
+    v_idx = v_norm.long().clamp(0, bins_h - 1)
+
+    flat_idx = v_idx * bins_w + u_idx
+    flat_heatmap = torch.zeros(bins_h * bins_w, device=u.device, dtype=torch.float32)
+    flat_heatmap.index_add_(0, flat_idx, torch.ones_like(flat_idx, dtype=torch.float32))
+    heatmap = flat_heatmap.view(bins_h, bins_w)
+    return heatmap / heatmap.max().clamp_min(1.0)
+
+
+def _debug_rasterize_support(rasterizer, means3D, scales, rotations, opacity, colors_precomp):
+    image, _ = rasterizer(
+        means3D=means3D,
+        means2D=torch.zeros_like(means3D),
+        shs=None,
+        colors_precomp=colors_precomp,
+        opacities=opacity,
+        scales=scales,
+        rotations=rotations,
+        cov3D_precomp=None,
+    )
+    return image
+
+
 def render_scene(
     outputs,
     depth_all,
@@ -301,6 +366,9 @@ def render_scene(
     if DEBUG.is_first_batch():
         DEBUG.log_debuge_csv(
             "render_scene_inputs",
+            render_color_mode="rgb_precomp" if colors_precomp is not None else "sh",
+            uses_colors_precomp=colors_precomp is not None,
+            uses_sh=shs is not None,
             means3D=means3D,
             opacity=opacity,
             scales=scales,
@@ -376,12 +444,63 @@ def render_scene(
 
     non_black_fraction = _non_black_fraction(rendered_image)
     positive_radii_fraction = (radii > 0).float().mean().item()
+    debug_payload = {}
+
+    capture_support_debug = DEBUG.is_first_batch() or non_black_fraction < 0.4
+    if capture_support_debug:
+        projection_stats = _project_points_to_image(
+            means3D,
+            target_extrinsic=target_extrinsic,
+            target_intrinsic=target_intrinsic,
+            H=H,
+            W=W,
+        )
+        center_heatmap = _center_heatmap(
+            projection_stats["u"],
+            projection_stats["v"],
+            projection_stats["inside_image"],
+            H=H,
+            W=W,
+        )
+
+        white_colors = torch.ones((means3D.shape[0], 3), device=device, dtype=means3D.dtype)
+        support_actual_opacity = _debug_rasterize_support(
+            rasterizer=rasterizer,
+            means3D=means3D,
+            scales=scales,
+            rotations=rotations,
+            opacity=opacity,
+            colors_precomp=white_colors,
+        )
+        support_opacity_one = _debug_rasterize_support(
+            rasterizer=rasterizer,
+            means3D=means3D,
+            scales=scales,
+            rotations=rotations,
+            opacity=torch.ones_like(opacity),
+            colors_precomp=white_colors,
+        )
+
+        debug_payload = {
+            "projected_center_heatmap": center_heatmap.detach().cpu(),
+            "support_actual_opacity": support_actual_opacity.detach().cpu(),
+            "support_opacity_one": support_opacity_one.detach().cpu(),
+            "inside_image_fraction": float(projection_stats["inside_image_fraction"].item()),
+            "support_actual_non_black_fraction": _non_black_fraction(support_actual_opacity),
+            "support_opacity_one_non_black_fraction": _non_black_fraction(support_opacity_one),
+        }
 
     if DEBUG.is_first_batch() or non_black_fraction == 0.0:
         DEBUG.log_debuge_csv(
             "render_scene_outputs",
             rendered_image=rendered_image,
             radii=radii,
+            projected_center_heatmap=debug_payload.get("projected_center_heatmap"),
+            support_actual_opacity=debug_payload.get("support_actual_opacity"),
+            support_opacity_one=debug_payload.get("support_opacity_one"),
+            inside_image_fraction=debug_payload.get("inside_image_fraction"),
+            support_actual_non_black_fraction=debug_payload.get("support_actual_non_black_fraction"),
+            support_opacity_one_non_black_fraction=debug_payload.get("support_opacity_one_non_black_fraction"),
             num_gaussians_total=num_gaussians_total,
             kept_after_threshold=kept_after_threshold,
             kept_after_topk=kept_after_topk,
@@ -411,7 +530,7 @@ def render_scene(
             target_extrinsic=target_extrinsic,
         )
     
-    return rendered_image
+    return rendered_image, debug_payload
 
 
 
@@ -491,7 +610,7 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         conf_low = model_outputs["conf_low"]
 
 
-        estimated_image = render_scene(
+        estimated_image, render_debug = render_scene(
             gaussian_head,
             model_outputs["depth"],
             training_data["train_poses"].unsqueeze(0).to(device),
@@ -516,8 +635,12 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
                 depth_low=depth_low,
                 conf_low=conf_low,
                 gaussian_outputs=gaussian_head,
+                gaussian_color_mode=gaussian_head.get("color_mode"),
+                gaussian_colors=gaussian_head.get("colors"),
+                gaussian_sh_coeffs=gaussian_head.get("sh_coeffs"),
                 estimated_extrinsics=estimated_extrinsics,
                 estimated_intrinsics=estimated_intrinsics,
+                render_debug=render_debug,
             )
 
        
@@ -596,6 +719,9 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         "estimated_image": estimated_image.detach().cpu(),
         "estimated_extrinsics": estimated_extrinsics.detach().cpu(),
         "estimated_intrinsics": estimated_intrinsics.detach().cpu(),
+        "projected_center_heatmap": render_debug.get("projected_center_heatmap"),
+        "support_actual_opacity": render_debug.get("support_actual_opacity"),
+        "support_opacity_one": render_debug.get("support_opacity_one"),
         "target_image": training_data["target_image"].detach().cpu(),
         "train_images": training_data["train_images"].detach().cpu(),
         "train_poses": training_data["train_poses"].detach().cpu(),
