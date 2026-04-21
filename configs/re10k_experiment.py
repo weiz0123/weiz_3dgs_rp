@@ -199,7 +199,7 @@ class ModelConfig:
     dino_name: str = "facebook/dinov3-vit7b16-pretrain-lvd1689m"
     color_mode: str = "rgb"
     sh_degree: int = 2
-    gaussian_per_cell: int = 1
+    gaussian_per_cell: int = 2
     emission_mode: str = "pixel_aligned"
     emission_grid_upsample: int = 2
     pixel_aligned_stride: int = 1
@@ -232,8 +232,10 @@ class TrainingConfig:
     weight_decay: float = 1e-4
     lambda_ssim: float = 0.2
     lambda_gradient: float = 0.1
+    lambda_multiview_depth: float = 0.05
     lambda_scale_reg: float = 1e-4
     lambda_opacity_reg: float = 5e-5
+    multiview_depth_num_neighbors: int = 1
     render_opacity_threshold: float = 0.001
     render_topk_gaussians: int | None = 524288
     save_every_n_epochs: int = 10

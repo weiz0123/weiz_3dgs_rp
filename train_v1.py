@@ -567,6 +567,7 @@ def main():
             f"l1={stats['loss_l1']:.6f} "
             f"ssim_loss={stats['loss_ssim']:.6f} "
             f"grad={stats['loss_gradient']:.6f} "
+            f"mv_depth={stats['loss_multiview_depth']:.6f} "
             f"psnr={stats['psnr']:.6f} "
             f"ssim={stats['ssim']:.6f} "
             f"lpips={stats['lpips']:.6f} "
@@ -579,6 +580,7 @@ def main():
             tb_writer.add_scalar("train/loss_l1", stats["loss_l1"], ep + 1)
             tb_writer.add_scalar("train/loss_ssim", stats["loss_ssim"], ep + 1)
             tb_writer.add_scalar("train/loss_gradient", stats["loss_gradient"], ep + 1)
+            tb_writer.add_scalar("train/loss_multiview_depth", stats["loss_multiview_depth"], ep + 1)
             tb_writer.add_scalar("train/loss_scale_reg", stats["loss_scale_reg"], ep + 1)
             tb_writer.add_scalar("train/loss_opacity_reg", stats["loss_opacity_reg"], ep + 1)
             tb_writer.add_scalar("train/psnr", stats["psnr"], ep + 1)
@@ -663,6 +665,7 @@ def main():
             loss_l1=stats["loss_l1"],
             loss_ssim=stats["loss_ssim"],
             loss_gradient=stats["loss_gradient"],
+            loss_multiview_depth=stats["loss_multiview_depth"],
             loss_scale_reg=stats["loss_scale_reg"],
             loss_opacity_reg=stats["loss_opacity_reg"],
             psnr=stats["psnr"],

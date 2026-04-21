@@ -146,6 +146,175 @@ def _gaussian_regularizers(outputs):
     return scale_reg, opacity_reg
 
 
+def _normalize_confidence_map(conf):
+    conf = torch.nan_to_num(conf, nan=0.0, posinf=0.0, neginf=0.0)
+    conf_min = float(conf.detach().amin())
+    conf_max = float(conf.detach().amax())
+    if conf_min < 0.0 or conf_max > 1.0:
+        conf = torch.sigmoid(conf)
+    return conf.clamp(0.0, 1.0)
+
+
+def _pairwise_depth_reprojection_loss(
+    depth_src,
+    conf_src,
+    depth_tgt,
+    conf_tgt,
+    intrinsic_src,
+    intrinsic_tgt,
+    pose_src,
+    pose_tgt,
+):
+    batch_size, _, height, width = depth_src.shape
+    device = depth_src.device
+    dtype = depth_src.dtype
+
+    intrinsic_src = _to_pixel_intrinsics(intrinsic_src, height, width)
+    intrinsic_tgt = _to_pixel_intrinsics(intrinsic_tgt, height, width)
+    pose_src = _to_homogeneous_4x4(pose_src.to(dtype))
+    pose_tgt = _to_homogeneous_4x4(pose_tgt.to(dtype))
+    w2c_tgt = torch.inverse(pose_tgt)
+
+    ys, xs = torch.meshgrid(
+        torch.arange(height, device=device, dtype=dtype),
+        torch.arange(width, device=device, dtype=dtype),
+        indexing="ij",
+    )
+    pixels = torch.stack([xs, ys, torch.ones_like(xs)], dim=0).reshape(1, 3, height * width)
+    pixels = pixels.expand(batch_size, -1, -1)
+
+    rays_src = torch.linalg.solve(intrinsic_src, pixels)
+    depth_src_flat = depth_src.reshape(batch_size, 1, height * width).clamp_min(1e-4)
+    points_src_cam = rays_src * depth_src_flat
+
+    ones = torch.ones(batch_size, 1, height * width, device=device, dtype=dtype)
+    points_src_h = torch.cat([points_src_cam, ones], dim=1)
+    points_world = pose_src @ points_src_h
+    points_tgt = w2c_tgt @ points_world
+
+    z_tgt = points_tgt[:, 2:3, :].reshape(batch_size, 1, height, width)
+    z_tgt_safe = z_tgt.clamp_min(1e-4)
+    x_tgt = points_tgt[:, 0:1, :].reshape(batch_size, 1, height, width) / z_tgt_safe
+    y_tgt = points_tgt[:, 1:2, :].reshape(batch_size, 1, height, width) / z_tgt_safe
+
+    fx_tgt = intrinsic_tgt[:, 0, 0].view(batch_size, 1, 1, 1)
+    fy_tgt = intrinsic_tgt[:, 1, 1].view(batch_size, 1, 1, 1)
+    cx_tgt = intrinsic_tgt[:, 0, 2].view(batch_size, 1, 1, 1)
+    cy_tgt = intrinsic_tgt[:, 1, 2].view(batch_size, 1, 1, 1)
+
+    u_tgt = fx_tgt * x_tgt + cx_tgt
+    v_tgt = fy_tgt * y_tgt + cy_tgt
+
+    grid_x = 2.0 * (u_tgt.squeeze(1) / max(width - 1, 1)) - 1.0
+    grid_y = 2.0 * (v_tgt.squeeze(1) / max(height - 1, 1)) - 1.0
+    grid = torch.stack([grid_x, grid_y], dim=-1)
+
+    sampled_depth_tgt = F.grid_sample(
+        depth_tgt,
+        grid,
+        mode="bilinear",
+        padding_mode="zeros",
+        align_corners=True,
+    )
+
+    conf_src = _normalize_confidence_map(conf_src).detach()
+    conf_tgt = _normalize_confidence_map(conf_tgt).detach()
+    sampled_conf_tgt = F.grid_sample(
+        conf_tgt,
+        grid,
+        mode="bilinear",
+        padding_mode="zeros",
+        align_corners=True,
+    )
+
+    inside = (
+        (grid[..., 0] >= -1.0)
+        & (grid[..., 0] <= 1.0)
+        & (grid[..., 1] >= -1.0)
+        & (grid[..., 1] <= 1.0)
+    ).unsqueeze(1)
+    valid = (
+        inside
+        & torch.isfinite(depth_src)
+        & torch.isfinite(sampled_depth_tgt)
+        & (depth_src > 1e-4)
+        & (sampled_depth_tgt > 1e-4)
+        & (z_tgt > 1e-4)
+    )
+
+    log_depth_error = F.smooth_l1_loss(
+        torch.log(z_tgt_safe),
+        torch.log(sampled_depth_tgt.clamp_min(1e-4)),
+        beta=0.05,
+        reduction="none",
+    )
+    weight = torch.sqrt((conf_src * sampled_conf_tgt).clamp_min(0.0)) * valid.to(dtype)
+    weight_sum = weight.sum()
+    if weight_sum.item() <= 0:
+        return depth_src.new_zeros(()), 0.0
+
+    loss = (log_depth_error * weight).sum() / weight_sum.clamp_min(1e-6)
+    valid_fraction = float(valid.float().mean().item())
+    return loss, valid_fraction
+
+
+def _multiview_depth_consistency_loss(
+    depth_all,
+    depth_conf_all,
+    train_intrinsics,
+    train_poses,
+    num_neighbors=1,
+):
+    if depth_all.ndim == 4:
+        depth_all = depth_all.unsqueeze(0)
+    if depth_conf_all.ndim == 4:
+        depth_conf_all = depth_conf_all.unsqueeze(0)
+    if train_intrinsics.ndim == 3:
+        train_intrinsics = train_intrinsics.unsqueeze(0)
+    if train_poses.ndim == 3:
+        train_poses = train_poses.unsqueeze(0)
+
+    num_view = depth_all.shape[1]
+    if num_view < 2 or num_neighbors <= 0:
+        return depth_all.new_zeros(()), 0.0
+
+    total_loss = depth_all.new_zeros(())
+    total_valid_fraction = 0.0
+    pair_count = 0
+
+    for src_idx in range(num_view - 1):
+        max_tgt_idx = min(num_view, src_idx + 1 + num_neighbors)
+        for tgt_idx in range(src_idx + 1, max_tgt_idx):
+            loss_forward, valid_forward = _pairwise_depth_reprojection_loss(
+                depth_src=depth_all[:, src_idx],
+                conf_src=depth_conf_all[:, src_idx],
+                depth_tgt=depth_all[:, tgt_idx],
+                conf_tgt=depth_conf_all[:, tgt_idx],
+                intrinsic_src=train_intrinsics[:, src_idx],
+                intrinsic_tgt=train_intrinsics[:, tgt_idx],
+                pose_src=train_poses[:, src_idx],
+                pose_tgt=train_poses[:, tgt_idx],
+            )
+            loss_backward, valid_backward = _pairwise_depth_reprojection_loss(
+                depth_src=depth_all[:, tgt_idx],
+                conf_src=depth_conf_all[:, tgt_idx],
+                depth_tgt=depth_all[:, src_idx],
+                conf_tgt=depth_conf_all[:, src_idx],
+                intrinsic_src=train_intrinsics[:, tgt_idx],
+                intrinsic_tgt=train_intrinsics[:, src_idx],
+                pose_src=train_poses[:, tgt_idx],
+                pose_tgt=train_poses[:, src_idx],
+            )
+            total_loss = total_loss + loss_forward + loss_backward
+            total_valid_fraction += valid_forward + valid_backward
+            pair_count += 2
+
+    if pair_count == 0:
+        return depth_all.new_zeros(()), 0.0
+
+    return total_loss / pair_count, total_valid_fraction / pair_count
+
+
 def _camera_space_point_stats(points_world, target_extrinsic):
     target_w2c = _to_homogeneous_4x4(target_extrinsic)
     rotation = target_w2c[:3, :3]
@@ -618,6 +787,7 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
     total_l1 = 0.0
     total_ssim_loss = 0.0
     total_gradient_loss = 0.0
+    total_multiview_depth_loss = 0.0
     total_scale_reg = 0.0
     total_opacity_reg = 0.0
     total_psnr = 0.0
@@ -670,18 +840,23 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
 
         inputs = training_data["train_images"].to(device)
         target_image = training_data["target_image"].to(device)
+        train_intrinsics = training_data["train_intrinsics"].to(device)
+        target_intrinsics = training_data["target_intrinsics"].to(device)
+        train_poses = training_data["train_poses"].to(device)
+        target_pose = training_data["target_pose"].to(device)
 
         optimizer.zero_grad(set_to_none=True)
         model_outputs = model(
             inputs,
-            train_intrinsics=training_data["train_intrinsics"].to(device),
-            train_poses=training_data["train_poses"].to(device),
+            train_intrinsics=train_intrinsics,
+            train_poses=train_poses,
         )
 
         gaussian_head = model_outputs["guaussian_outputs"]
         dino_feat  = model_outputs["features"]
         fused_map = model_outputs["fused_map"]
         vggt_depth = model_outputs["depth"]
+        vggt_depth_conf = model_outputs["depth_conf"]
         depth_low = model_outputs["depth_low"]
         conf_low = model_outputs["conf_low"]
 
@@ -689,10 +864,10 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         estimated_image, render_debug = render_scene(
             gaussian_head,
             model_outputs["depth"],
-            training_data["train_poses"].unsqueeze(0).to(device),
-            training_data["train_intrinsics"].unsqueeze(0).to(device),
-            training_data["target_pose"].unsqueeze(0).to(device),
-            training_data["target_intrinsics"].unsqueeze(0).to(device),
+            train_poses.unsqueeze(0),
+            train_intrinsics.unsqueeze(0),
+            target_pose.unsqueeze(0),
+            target_intrinsics.unsqueeze(0),
             H=inputs.shape[-2],
             W=inputs.shape[-1],
             sh_degree=gaussian_head["sh_degree"],
@@ -708,6 +883,7 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
                 fused_map=fused_map,
                 fusion_map_coarse=model_outputs.get("fusion_map_coarse"),
                 vggt_depth=vggt_depth,
+                vggt_depth_conf=vggt_depth_conf,
                 depth_low=depth_low,
                 conf_low=conf_low,
                 gaussian_outputs=gaussian_head,
@@ -734,10 +910,18 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
             target_image.unsqueeze(0),
         )
         gradient_loss = _image_gradient_loss(estimated_image, target_image)
+        multiview_depth_loss, multiview_valid_fraction = _multiview_depth_consistency_loss(
+            depth_all=vggt_depth,
+            depth_conf_all=vggt_depth_conf,
+            train_intrinsics=train_intrinsics.unsqueeze(0),
+            train_poses=train_poses.unsqueeze(0),
+            num_neighbors=int(getattr(config.training, "multiview_depth_num_neighbors", 1)) if config is not None else 1,
+        )
         scale_reg, opacity_reg = _gaussian_regularizers(gaussian_head)
 
         lambda_ssim = float(getattr(config.training, "lambda_ssim", 0.2)) if config is not None else 0.2
         lambda_gradient = float(getattr(config.training, "lambda_gradient", 0.1)) if config is not None else 0.1
+        lambda_multiview_depth = float(getattr(config.training, "lambda_multiview_depth", 0.05)) if config is not None else 0.05
         lambda_scale_reg = float(getattr(config.training, "lambda_scale_reg", 1e-4)) if config is not None else 1e-4
         lambda_opacity_reg = float(getattr(config.training, "lambda_opacity_reg", 5e-5)) if config is not None else 5e-5
 
@@ -746,6 +930,7 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
             + mae_loss
             + lambda_ssim * ssim_loss
             + lambda_gradient * gradient_loss
+            + lambda_multiview_depth * multiview_depth_loss
             + lambda_scale_reg * scale_reg
             + lambda_opacity_reg * opacity_reg
         )
@@ -761,6 +946,7 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         total_l1 += mae_loss.item()
         total_ssim_loss += ssim_loss.item()
         total_gradient_loss += gradient_loss.item()
+        total_multiview_depth_loss += multiview_depth_loss.item()
         total_scale_reg += scale_reg.item()
         total_opacity_reg += opacity_reg.item()
         total_psnr += float(psnr)
@@ -775,6 +961,8 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
             loss_l1=mae_loss.item(),
             loss_ssim=ssim_loss.item(),
             loss_gradient=gradient_loss.item(),
+            loss_multiview_depth=multiview_depth_loss.item(),
+            multiview_valid_fraction=multiview_valid_fraction,
             loss_scale_reg=scale_reg.item(),
             loss_opacity_reg=opacity_reg.item(),
             psnr=float(psnr),
@@ -807,6 +995,7 @@ def train_epoch(model, data_manager, dataloader, optimizer, device, config=None,
         "loss_l1": total_l1 / steps,
         "loss_ssim": total_ssim_loss / steps,
         "loss_gradient": total_gradient_loss / steps,
+        "loss_multiview_depth": total_multiview_depth_loss / steps,
         "loss_scale_reg": total_scale_reg / steps,
         "loss_opacity_reg": total_opacity_reg / steps,
         "psnr": total_psnr / steps,

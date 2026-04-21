@@ -71,6 +71,15 @@ def _resolve_emission_hw(mode, image_hw, coarse_hw, stride):
     return coarse_hw
 
 
+def _normalize_confidence_map(conf):
+    conf = torch.nan_to_num(conf, nan=0.0, posinf=0.0, neginf=0.0)
+    conf_min = float(conf.detach().amin())
+    conf_max = float(conf.detach().amax())
+    if conf_min < 0.0 or conf_max > 1.0:
+        conf = torch.sigmoid(conf)
+    return conf.clamp(0.0, 1.0)
+
+
 
 class V1GSModel(nn.Module):
     def __init__(self, num_view=8, gaussian_per_pixel=2, sh_degree=2, config=None):
@@ -240,6 +249,7 @@ class V1GSModel(nn.Module):
             mode="bilinear",
             align_corners=False,
         ).reshape(batch_size, num_view, 1, fusion_h, fusion_w)
+        conf_fusion_all = _normalize_confidence_map(conf_fusion_all).detach()
         depth_emission_all = F.interpolate(
             depth_all.reshape(batch_size * num_view, 1, height, width),
             size=(emit_h, emit_w),
@@ -252,6 +262,7 @@ class V1GSModel(nn.Module):
             mode="bilinear",
             align_corners=False,
         ).reshape(batch_size, num_view, 1, emit_h, emit_w)
+        conf_emission_all = _normalize_confidence_map(conf_emission_all).detach()
 
         src_agg_weight = torch.sigmoid(self.src_agg_logit)
         vggt_ref_weight = torch.sigmoid(self.vggt_ref_logit)
@@ -259,11 +270,14 @@ class V1GSModel(nn.Module):
         src_valid_fractions = []
         src_agg_feature_maps = []
         projected_vggt_refs = []
+        ref_conf_maps = []
         for ref_view_idx in range(num_view):
             ref_feature_map = dino_fusion_map[:, ref_view_idx]
             ref_vggt_map = vggt_spatial_low[:, ref_view_idx]
             projected_vggt_ref = self.vggt_map_to_dino(ref_vggt_map)
             projected_vggt_refs.append(projected_vggt_ref)
+            ref_conf_fusion = conf_fusion_all[:, ref_view_idx]
+            ref_conf_maps.append(ref_conf_fusion)
 
             warped_feature_sum = torch.zeros(
                 batch_size,
@@ -273,7 +287,7 @@ class V1GSModel(nn.Module):
                 device=inputs.device,
                 dtype=ref_feature_map.dtype,
             )
-            warped_valid_sum = torch.zeros(
+            warped_weight_sum = torch.zeros(
                 batch_size,
                 1,
                 fusion_h,
@@ -293,17 +307,26 @@ class V1GSModel(nn.Module):
                     K_src=scaled_intrinsics_fusion[:, src_view_idx],
                     c2w_src=train_poses[:, src_view_idx],
                 )
-                warped_feature_sum = warped_feature_sum + warped_src * warped_valid
-                warped_valid_sum = warped_valid_sum + warped_valid
+                warped_src_conf, _ = warp_feature_to_ref_plane(
+                    src_feat=conf_fusion_all[:, src_view_idx],
+                    depth_plane=ref_depth_low,
+                    K_ref=scaled_intrinsics_fusion[:, ref_view_idx],
+                    c2w_ref=train_poses[:, ref_view_idx],
+                    K_src=scaled_intrinsics_fusion[:, src_view_idx],
+                    c2w_src=train_poses[:, src_view_idx],
+                )
+                pair_weight = warped_valid * warped_src_conf * ref_conf_fusion
+                warped_feature_sum = warped_feature_sum + warped_src * pair_weight
+                warped_weight_sum = warped_weight_sum + pair_weight
 
-            src_valid_fraction = (warped_valid_sum / max(num_view - 1, 1)).clamp(0.0, 1.0)
+            src_valid_fraction = (warped_weight_sum / max(num_view - 1, 1)).clamp(0.0, 1.0)
             src_agg_feature_map = self.warp_to_dino(
-                warped_feature_sum / warped_valid_sum.clamp(min=1.0)
+                warped_feature_sum / warped_weight_sum.clamp(min=1e-6)
             )
             fused_ref_map = (
                 ref_feature_map
                 + src_agg_weight * src_valid_fraction * src_agg_feature_map
-                + vggt_ref_weight * projected_vggt_ref
+                + vggt_ref_weight * ref_conf_fusion * projected_vggt_ref
             )
             fused_maps.append(fused_ref_map)
             src_valid_fractions.append(src_valid_fraction)
@@ -313,6 +336,7 @@ class V1GSModel(nn.Module):
         src_valid_fraction = torch.stack(src_valid_fractions, dim=1)
         src_agg_feature_map = torch.stack(src_agg_feature_maps, dim=1)
         projected_vggt_ref = torch.stack(projected_vggt_refs, dim=1)
+        ref_conf_fusion = torch.stack(ref_conf_maps, dim=1)
         head_feature_map = self.fused_to_emission(
             fused_map.reshape(batch_size * num_view, fused_map.shape[2], fusion_h, fusion_w)
         )
@@ -376,8 +400,10 @@ class V1GSModel(nn.Module):
                 vggt_spatial_low=vggt_spatial_low,
                 emission_reference_views=list(range(num_view)),
                 projected_vggt_ref=projected_vggt_ref,
+                ref_conf_fusion=ref_conf_fusion,
                 src_agg_feature_map=src_agg_feature_map,
                 src_valid_fraction=src_valid_fraction,
+                conf_fusion_all=conf_fusion_all,
                 src_agg_weight=src_agg_weight,
                 vggt_ref_weight=vggt_ref_weight,
                 emission_mode=self.emission_mode,
@@ -413,6 +439,7 @@ class V1GSModel(nn.Module):
             "fused_map": head_feature_map,
             "fusion_map_coarse": fused_map,
             "depth": depth_all,
+            "depth_conf": depth_conf_all,
             "depth_low": depth_low,
             "conf_low": conf_low,
             "estimated_extrinsics": extrinsic_all.float(),
